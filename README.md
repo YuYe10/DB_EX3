@@ -8,6 +8,31 @@
 
 ## 1) 配置后端
 
+### 新的模块化架构 🎉
+
+后端代码已重构为模块化、分层架构：
+
+```
+backend/
+├── app.py              # 应用入口（工厂模式）
+├── config.py           # 配置管理
+├── utils.py            # 工具函数
+├── services/           # 业务逻辑层
+│   ├── user_service.py
+│   ├── student_service.py
+│   ├── teacher_service.py
+│   └── admin_service.py
+└── api/                # 路由层（蓝图）
+    ├── auth.py
+    ├── student.py
+    ├── teacher.py
+    └── admin.py
+```
+
+详细说明：[backend/REFACTORING_REPORT.md](backend/REFACTORING_REPORT.md)
+
+### 安装依赖
+
 ```bash
 cd backend
 python -m venv .venv
