@@ -1,0 +1,552 @@
+<template>
+  <div class="teacher-page">
+    <header class="hero">
+      <div class="user-info">
+        <h1>👨‍🏫 教师界面</h1>
+        <p>欢迎，<strong>{{ user.name }}</strong> ({{ user.teacher_no }})</p>
+      </div>
+      <div class="actions">
+        <button @click="showChangePassword = true" class="btn-secondary">修改密码</button>
+        <button @click="handleLogout" class="btn-logout">退出登录</button>
+      </div>
+    </header>
+
+    <section class="card">
+      <h2>📖 我的授课</h2>
+      <div v-if="myCourses.length === 0" class="empty">暂无授课课程</div>
+      <div v-else class="course-tabs">
+        <div class="tab-buttons">
+          <button 
+            v-for="c in myCourses" 
+            :key="c.id"
+            @click="selectCourse(c.id)"
+            :class="{ active: selectedCourseId === c.id }"
+            class="tab-btn"
+          >
+            {{ c.name }} ({{ c.enrolled_count }}人)
+          </button>
+        </div>
+        
+        <div v-if="selectedCourse" class="tab-content">
+          <div class="course-header">
+            <h3>{{ selectedCourse.name }}</h3>
+            <p class="course-detail">
+              {{ selectedCourse.course_code }} · {{ selectedCourse.credit }}学分 · 
+              容量{{ selectedCourse.capacity }}
+            </p>
+          </div>
+          
+          <div class="student-list">
+            <div v-if="students.length === 0" class="empty-small">暂无学生选课</div>
+            <div v-else class="student-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>学号</th>
+                    <th>姓名</th>
+                    <th>专业</th>
+                    <th>成绩</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="s in students" :key="s.id">
+                    <td>{{ s.student_no }}</td>
+                    <td><strong>{{ s.student_name }}</strong></td>
+                    <td>{{ s.major || '-' }}</td>
+                    <td>
+                      <span v-if="s.grade !== null" class="grade-display">{{ s.grade }}</span>
+                      <span v-else class="grade-display empty">未评分</span>
+                    </td>
+                    <td>
+                      <button @click="openGradeModal(s)" class="btn-grade">录入成绩</button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div v-if="showGradeModal" class="modal" @click.self="showGradeModal = false">
+      <div class="modal-content">
+        <h3>录入成绩</h3>
+        <div class="student-info-box">
+          <p><strong>学生:</strong> {{ currentStudent?.student_name }} ({{ currentStudent?.student_no }})</p>
+          <p><strong>课程:</strong> {{ selectedCourse?.name }}</p>
+        </div>
+        <form @submit.prevent="submitGrade">
+          <div class="form-group">
+            <label>成绩 (0-100)</label>
+            <input 
+              v-model.number="gradeForm.grade" 
+              type="number" 
+              min="0" 
+              max="100" 
+              step="0.5"
+              required 
+              placeholder="请输入成绩"
+            />
+          </div>
+          <div class="error-message" v-if="errorMsg">{{ errorMsg }}</div>
+          <div class="modal-actions">
+            <button type="button" @click="showGradeModal = false" class="btn-cancel">取消</button>
+            <button type="submit" class="btn-primary">提交</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div v-if="showChangePassword" class="modal" @click.self="showChangePassword = false">
+      <div class="modal-content">
+        <h3>修改密码</h3>
+        <form @submit.prevent="changePassword">
+          <div class="form-group">
+            <label>旧密码</label>
+            <input v-model="passwordForm.old_password" type="password" required />
+          </div>
+          <div class="form-group">
+            <label>新密码</label>
+            <input v-model="passwordForm.new_password" type="password" required />
+          </div>
+          <div class="error-message" v-if="pwdErrorMsg">{{ pwdErrorMsg }}</div>
+          <div class="modal-actions">
+            <button type="button" @click="showChangePassword = false" class="btn-cancel">取消</button>
+            <button type="submit" class="btn-primary">确认修改</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref, reactive, onMounted, computed } from 'vue'
+
+const props = defineProps({
+  user: { type: Object, required: true }
+})
+
+const emit = defineEmits(['logout'])
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:5000/api'
+
+const myCourses = ref([])
+const selectedCourseId = ref(null)
+const students = ref([])
+const showGradeModal = ref(false)
+const showChangePassword = ref(false)
+const currentStudent = ref(null)
+const errorMsg = ref('')
+const pwdErrorMsg = ref('')
+const gradeForm = reactive({ grade: null })
+const passwordForm = reactive({ old_password: '', new_password: '' })
+
+const selectedCourse = computed(() => myCourses.value.find(c => c.id === selectedCourseId.value))
+
+async function api(path, options = {}) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    ...options
+  })
+  if (!res.ok) {
+    const data = await res.json()
+    throw new Error(data.message || '操作失败')
+  }
+  return res.json()
+}
+
+async function loadCourses() {
+  try {
+    myCourses.value = await api('/teacher/courses')
+    if (myCourses.value.length > 0 && !selectedCourseId.value) {
+      selectCourse(myCourses.value[0].id)
+    }
+  } catch (error) {
+    console.error('加载课程失败:', error)
+  }
+}
+
+async function selectCourse(courseId) {
+  selectedCourseId.value = courseId
+  try {
+    students.value = await api(`/teacher/courses/${courseId}/students`)
+  } catch (error) {
+    console.error('加载学生列表失败:', error)
+  }
+}
+
+function openGradeModal(student) {
+  currentStudent.value = student
+  gradeForm.grade = student.grade
+  showGradeModal.value = true
+  errorMsg.value = ''
+}
+
+async function submitGrade() {
+  errorMsg.value = ''
+  try {
+    await api(`/teacher/enrollments/${currentStudent.value.id}/grade`, {
+      method: 'PUT',
+      body: JSON.stringify({ grade: gradeForm.grade })
+    })
+    showGradeModal.value = false
+    await selectCourse(selectedCourseId.value)
+  } catch (error) {
+    errorMsg.value = error.message
+  }
+}
+
+async function changePassword() {
+  pwdErrorMsg.value = ''
+  try {
+    await api('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify(passwordForm)
+    })
+    alert('密码修改成功')
+    showChangePassword.value = false
+    passwordForm.old_password = ''
+    passwordForm.new_password = ''
+  } catch (error) {
+    pwdErrorMsg.value = error.message
+  }
+}
+
+function handleLogout() {
+  emit('logout')
+}
+
+onMounted(() => loadCourses())
+</script>
+
+<style scoped>
+.teacher-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 28px;
+  background: white;
+  border-radius: 14px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+  margin-bottom: 20px;
+}
+
+.user-info h1 {
+  margin: 0 0 4px 0;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.user-info p {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+}
+
+.btn-secondary, .btn-logout {
+  padding: 7px 14px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-secondary {
+  border: 1px solid #e2e8f0;
+  background: white;
+  color: #0f172a;
+}
+
+.btn-secondary:hover {
+  background: #f8fafc;
+}
+
+.btn-logout {
+  border: none;
+  background: #ef4444;
+  color: white;
+}
+
+.btn-logout:hover {
+  background: #dc2626;
+}
+
+.card {
+  background: white;
+  border-radius: 14px;
+  padding: 20px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+}
+
+.card h2 {
+  margin: 0 0 16px 0;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.empty, .empty-small {
+  text-align: center;
+  padding: 28px;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.empty-small {
+  padding: 16px;
+}
+
+.tab-buttons {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.tab-btn {
+  padding: 8px 14px;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  background: white;
+  color: #64748b;
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tab-btn:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+
+.tab-btn.active {
+  border-color: #8b5cf6;
+  background: #8b5cf6;
+  color: white;
+}
+
+.course-header {
+  padding: 14px;
+  background: #f8fafc;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.course-header h3 {
+  margin: 0 0 4px 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.course-detail {
+  margin: 0;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.student-table {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+thead {
+  background: #f8fafc;
+}
+
+th {
+  padding: 10px;
+  text-align: left;
+  font-weight: 700;
+  font-size: 11px;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+td {
+  padding: 10px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+tbody tr:hover {
+  background: #f8fafc;
+}
+
+.grade-display {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: #dcfce7;
+  color: #166534;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.grade-display.empty {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.btn-grade {
+  padding: 5px 10px;
+  border: none;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  color: white;
+  font-weight: 600;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-grade:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(139,92,246,0.3);
+}
+
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 14px;
+  padding: 28px;
+  width: 100%;
+  max-width: 380px;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+}
+
+.modal-content h3 {
+  margin: 0 0 16px 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.student-info-box {
+  padding: 10px 14px;
+  background: #f8fafc;
+  border-radius: 8px;
+  margin-bottom: 14px;
+}
+
+.student-info-box p {
+  margin: 3px 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.form-group {
+  margin-bottom: 14px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: 600;
+  font-size: 12px;
+  color: #0f172a;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 9px 11px;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 13px;
+  outline: none;
+  transition: all 0.2s;
+  box-sizing: border-box;
+}
+
+.form-group input:focus {
+  border-color: #8b5cf6;
+  box-shadow: 0 0 0 3px rgba(139,92,246,0.1);
+}
+
+.error-message {
+  padding: 8px;
+  background: #fee2e2;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  color: #b91c1c;
+  font-size: 11px;
+  margin-bottom: 12px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.btn-cancel, .btn-primary {
+  flex: 1;
+  padding: 9px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.btn-cancel {
+  border: 1px solid #e2e8f0;
+  background: white;
+  color: #0f172a;
+}
+
+.btn-primary {
+  border: none;
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  color: white;
+}
+
+@media (max-width: 768px) {
+  .hero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .actions {
+    width: 100%;
+  }
+  .actions button {
+    flex: 1;
+  }
+  table {
+    font-size: 11px;
+  }
+  th, td {
+    padding: 7px;
+  }
+}
+</style>
