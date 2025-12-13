@@ -1,7 +1,7 @@
 """
 Teacher routes blueprint.
 """
-from flask import Blueprint, request, session
+from flask import Blueprint, request, session, jsonify
 from services import TeacherService
 from utils import json_response, error_response, require_auth
 
@@ -13,7 +13,8 @@ teacher_bp = Blueprint('teacher', __name__, url_prefix='/api/teacher')
 def get_courses():
     """Get courses taught by current teacher."""
     courses = TeacherService.get_courses(session['ref_id'])
-    return json_response(courses)
+    # Frontend expects a plain array, not a wrapped payload
+    return jsonify(courses)
 
 
 @teacher_bp.route('/courses/<int:course_id>/students', methods=['GET'])
@@ -25,7 +26,8 @@ def get_course_students(course_id: int):
     if students is None:
         return error_response('Course not found or access denied', status=404)
     
-    return json_response(students)
+    # Frontend expects a plain array, not a wrapped payload
+    return jsonify(students)
 
 
 @teacher_bp.route('/enrollments/<int:enrollment_id>/grade', methods=['PUT'])

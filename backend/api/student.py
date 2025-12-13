@@ -1,7 +1,7 @@
 """
 Student routes blueprint.
 """
-from flask import Blueprint, request, session
+from flask import Blueprint, request, session, jsonify
 from services import StudentService
 from utils import json_response, error_response, validate_fields, require_auth
 
@@ -13,7 +13,8 @@ student_bp = Blueprint('student', __name__, url_prefix='/api/student')
 def get_available_courses():
     """Get all courses available for enrollment."""
     courses = StudentService.get_available_courses(session['ref_id'])
-    return json_response(courses)
+    # Frontend expects a plain array, not a wrapped payload
+    return jsonify(courses)
 
 
 @student_bp.route('/enrollments', methods=['GET', 'POST'])
@@ -24,7 +25,8 @@ def enrollments():
     
     if request.method == 'GET':
         enrollments = StudentService.get_enrollments(student_id)
-        return json_response(enrollments)
+        # Frontend expects a plain array, not a wrapped payload
+        return jsonify(enrollments)
     
     # POST - Enroll in course
     payload = request.get_json(force=True)
