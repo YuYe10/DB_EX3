@@ -209,6 +209,50 @@
           <p>暂无选课记录</p>
         </div>
       </article>
+
+      <article class="card" style="--accent: #f59e0b;">
+        <header class="card-header">
+          <h2>📥 Excel导入/导出</h2>
+          <p class="card-desc">批量导入课程与学生名单，导出课程成绩</p>
+        </header>
+
+        <div class="import-box">
+          <label class="upload-btn">
+            <input type="file" accept=".xlsx,.xls" @change="importExcel" />
+            <span>{{ importLoading ? '正在导入...' : '上传Excel导入' }}</span>
+          </label>
+          <p class="help-text">工作表要求：courses(必填)，可选 students、enrollments</p>
+          <p class="error-text" v-if="importError">{{ importError }}</p>
+          <div class="summary" v-if="importSummary">
+            <div>课程新增 {{ importSummary.courses_created }}，跳过 {{ importSummary.courses_skipped }}</div>
+            <div>学生新增 {{ importSummary.students_created }}，跳过 {{ importSummary.students_skipped }}</div>
+            <div>教师新增 {{ importSummary.teachers_created }}</div>
+            <div>选课新增 {{ importSummary.enrollments_created }}，跳过 {{ importSummary.enrollments_skipped }}</div>
+            <div v-if="importSummary.errors?.length" class="error-list">
+              <strong>提醒:</strong>
+              <ul>
+                <li v-for="(e, idx) in importSummary.errors" :key="idx">{{ e }}</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="export-box">
+          <div class="form-row">
+            <label class="form-group">
+              <span class="label-text">选择课程</span>
+              <select v-model.number="exportCourseId">
+                <option :value="''">请选择课程</option>
+                <option v-for="c in courses" :value="c.id" :key="c.id">{{ c.name }}</option>
+              </select>
+            </label>
+          </div>
+          <button class="btn-primary" @click="exportGrades" :disabled="!exportCourseId || exportLoading">
+            {{ exportLoading ? '生成中...' : '导出成绩Excel' }}
+          </button>
+          <p class="error-text" v-if="exportError">{{ exportError }}</p>
+        </div>
+      </article>
     </section>
 
     <section class="card stats-card" v-if="stats.course_avg?.length">
@@ -246,6 +290,12 @@ const teachers = ref([])
 const courses = ref([])
 const enrollments = ref([])
 const stats = reactive({ counts: null, course_avg: [] })
+const importSummary = ref(null)
+const importError = ref('')
+const importLoading = ref(false)
+const exportCourseId = ref('')
+const exportLoading = ref(false)
+const exportError = ref('')
 
 const studentForm = reactive({ student_no: '', name: '', major: '' })
 const teacherForm = reactive({ teacher_no: '', name: '', department: '' })
@@ -345,6 +395,59 @@ async function setGrade(id) {
 async function dropCourse(id) {
   await api(`/enrollments/${id}`, { method: 'DELETE' })
   await loadAll()
+}
+
+async function importExcel(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+  importError.value = ''
+  importSummary.value = null
+  importLoading.value = true
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    const res = await fetch(`${API_BASE}/import/courses`, {
+      method: 'POST',
+      body: formData,
+      credentials: 'include',
+    })
+    const data = await res.json()
+    if (!res.ok || data.success === false) throw new Error(data.message || '导入失败')
+    importSummary.value = data.summary || null
+    await loadAll()
+  } catch (err) {
+    importError.value = err.message
+  } finally {
+    importLoading.value = false
+    event.target.value = ''
+  }
+}
+
+async function exportGrades() {
+  if (!exportCourseId.value) return
+  exportError.value = ''
+  exportLoading.value = true
+  try {
+    const res = await fetch(`${API_BASE}/courses/${exportCourseId.value}/grades/export`, {
+      credentials: 'include',
+    })
+    if (!res.ok) throw new Error(await res.text())
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const course = courses.value.find(c => c.id === exportCourseId.value) || {}
+    const filename = `成绩单_${course.course_code || course.name || 'course'}.xlsx`
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  } catch (err) {
+    exportError.value = err.message
+  } finally {
+    exportLoading.value = false
+  }
 }
 
 onMounted(async () => {
@@ -868,6 +971,74 @@ input:focus, select:focus {
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   font-size: 13px;
+}
+
+/* ===== IMPORT / EXPORT ===== */
+.import-box, .export-box {
+  margin-top: 12px;
+  padding: 16px;
+  border: 1px dashed #f59e0b;
+  border-radius: 12px;
+  background: #fff7ed;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.upload-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: #f59e0b;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 700;
+  border: none;
+  box-shadow: 0 10px 25px rgba(245, 158, 11, 0.25);
+  position: relative;
+  overflow: hidden;
+}
+
+.upload-btn input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.help-text {
+  margin: 0;
+  color: #b45309;
+  font-size: 13px;
+}
+
+.summary {
+  font-size: 13px;
+  color: #92400e;
+  display: grid;
+  gap: 4px;
+}
+
+.error-text {
+  color: #b91c1c;
+  font-size: 13px;
+  margin: 0;
+}
+
+.error-list {
+  margin-top: 6px;
+  background: #fef2f2;
+  border: 1px solid #fecdd3;
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: #991b1b;
+}
+
+.error-list ul {
+  padding-left: 18px;
+  margin: 6px 0 0 0;
 }
 
 /* ===== STATS SECTION ===== */

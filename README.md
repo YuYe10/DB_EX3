@@ -48,6 +48,17 @@ copy ..\.env.example ..\.env   # 根据实际修改
 ```bash
 # 直连示例
 OG_SSH_TUNNEL=false
+
+## Excel 导入/导出与示例
+
+- 生成示例导入模板（包含 courses / students / enrollments 三个工作表）：
+  ```bash
+  cd backend/scripts
+  python generate_sample_excel.py
+  ```
+  会在当前目录生成 `sample_import.xlsx`，可直接用于管理员界面的 Excel 导入。
+
+- 管理员界面支持导出成绩单，文件命名格式：`<课程名称>-<授课老师>-<导出时间>.xlsx`，表头为中文（课程信息、成绩名单）。
 OG_HOST=192.168.0.61
 OG_PORT=26000
 OG_DBNAME=student_db

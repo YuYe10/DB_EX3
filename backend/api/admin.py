@@ -1,7 +1,7 @@
 """
 Admin routes blueprint.
 """
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, send_file
 from services import AdminService
 from utils import json_response, error_response, validate_fields, require_auth
 
@@ -207,6 +207,39 @@ def statistics_overview():
     """Get system statistics."""
     stats = AdminService.get_statistics()
     return jsonify(stats)
+
+
+# ========== Excel Import / Export ========== #
+
+@admin_bp.route('/import/courses', methods=['POST'])
+@require_auth(['admin'])
+def import_courses():
+    """Import courses, students, and enrollments from an Excel file."""
+    file = request.files.get('file')
+    if not file:
+        return error_response('请选择要上传的Excel文件')
+    try:
+        summary = AdminService.import_courses_excel(file)
+        return json_response({'summary': summary}, message='导入完成')
+    except ValueError as exc:
+        return error_response(str(exc))
+    except Exception as exc:
+        return error_response(f'导入失败: {exc}', status=500)
+
+
+@admin_bp.route('/courses/<int:course_id>/grades/export', methods=['GET'])
+@require_auth(['admin'])
+def export_course_grades(course_id: int):
+    """Export a course's roster and grades as Excel."""
+    buffer, filename = AdminService.export_course_grades(course_id)
+    if buffer is None:
+        return error_response('课程不存在', status=404)
+    return send_file(
+        buffer,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=filename
+    )
 
 
 # ========== Health Check ========== #

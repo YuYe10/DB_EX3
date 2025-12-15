@@ -2,12 +2,209 @@
 Admin service for administrative operations.
 """
 from typing import List, Dict, Any, Optional
+from io import BytesIO
+from datetime import datetime
+import pandas as pd
 from db import db
 from services.user_service import UserService
 
 
 class AdminService:
     """Service for admin-related operations."""
+
+    # ===== Excel Import / Export ===== #
+
+    @staticmethod
+    def import_courses_excel(file_stream) -> Dict[str, Any]:
+        """Import courses, students, and enrollments from an Excel workbook."""
+        try:
+            workbook = pd.ExcelFile(file_stream)
+        except Exception as exc:  # pragma: no cover - defensive parsing
+            raise ValueError(f"无法读取Excel文件: {exc}")
+
+        if 'courses' not in workbook.sheet_names:
+            raise ValueError("Excel需包含名称为 'courses' 的工作表")
+
+        summary = {
+            'courses_created': 0,
+            'courses_skipped': 0,
+            'students_created': 0,
+            'students_skipped': 0,
+            'teachers_created': 0,
+            'enrollments_created': 0,
+            'enrollments_skipped': 0,
+            'errors': []
+        }
+
+        # Cache existing IDs
+        student_map = {row['student_no']: row['id'] for row in db.fetch_all('SELECT id, student_no FROM students')}
+        teacher_map = {row['teacher_no']: row['id'] for row in db.fetch_all('SELECT id, teacher_no FROM teachers')}
+        course_map = {row['course_code']: row['id'] for row in db.fetch_all('SELECT id, course_code FROM courses')}
+
+        # Optional helper to coerce numeric values with default fallback
+        def _num(value, default):
+            if pd.isna(value):
+                return default
+            try:
+                return int(value)
+            except Exception:
+                try:
+                    return float(value)
+                except Exception:
+                    return default
+
+        # Students sheet (optional)
+        if 'students' in workbook.sheet_names:
+            students_df = workbook.parse('students').fillna('')
+            for _, row in students_df.iterrows():
+                student_no = str(row.get('student_no', '')).strip()
+                if not student_no:
+                    summary['errors'].append('学生行缺少 student_no，已跳过')
+                    continue
+                if student_no in student_map:
+                    summary['students_skipped'] += 1
+                    continue
+                name = str(row.get('name', '')).strip() or student_no
+                major = str(row.get('major', '')).strip()
+                student_id = AdminService.create_student(student_no, name, major)
+                student_map[student_no] = student_id
+                summary['students_created'] += 1
+
+        # Courses sheet (required)
+        courses_df = workbook.parse('courses').fillna('')
+        for _, row in courses_df.iterrows():
+            course_code = str(row.get('course_code', '')).strip()
+            name = str(row.get('name', '')).strip()
+            if not course_code or not name:
+                summary['errors'].append('课程行缺少 course_code 或 name，已跳过')
+                continue
+
+            teacher_no = str(row.get('teacher_no', '')).strip()
+            teacher_name = str(row.get('teacher_name', '')).strip()
+            teacher_id = None
+            if teacher_no:
+                if teacher_no in teacher_map:
+                    teacher_id = teacher_map[teacher_no]
+                else:
+                    t_name = teacher_name or teacher_no
+                    teacher_id = AdminService.create_teacher(teacher_no, t_name)
+                    teacher_map[teacher_no] = teacher_id
+                    summary['teachers_created'] += 1
+
+            credit = _num(row.get('credit', 0), 0)
+            capacity = _num(row.get('capacity', 50), 50)
+
+            if course_code in course_map:
+                summary['courses_skipped'] += 1
+                course_id = course_map[course_code]
+            else:
+                course_id = AdminService.create_course(course_code, name, credit, capacity, teacher_id)
+                course_map[course_code] = course_id
+                summary['courses_created'] += 1
+
+        # Enrollments sheet (optional)
+        if 'enrollments' in workbook.sheet_names:
+            enroll_df = workbook.parse('enrollments').fillna('')
+            for _, row in enroll_df.iterrows():
+                course_code = str(row.get('course_code', '')).strip()
+                student_no = str(row.get('student_no', '')).strip()
+                if not course_code or not student_no:
+                    summary['errors'].append('选课行缺少 course_code 或 student_no，已跳过')
+                    continue
+                if course_code not in course_map:
+                    summary['errors'].append(f'课程 {course_code} 未找到，选课跳过')
+                    continue
+                if student_no not in student_map:
+                    # Create missing student on the fly
+                    student_name = str(row.get('student_name', '')).strip() or student_no
+                    major = str(row.get('major', '')).strip()
+                    student_id = AdminService.create_student(student_no, student_name, major)
+                    student_map[student_no] = student_id
+                    summary['students_created'] += 1
+                course_id = course_map[course_code]
+                student_id = student_map[student_no]
+
+                exists = db.fetch_one(
+                    'SELECT id FROM enrollments WHERE student_id=%s AND course_id=%s',
+                    [student_id, course_id]
+                )
+                if exists:
+                    summary['enrollments_skipped'] += 1
+                    continue
+
+                grade_val = row.get('grade', None)
+                grade = None if pd.isna(grade_val) else grade_val
+                status = str(row.get('status', 'enrolled')).strip() or 'enrolled'
+
+                db.execute(
+                    'INSERT INTO enrollments (student_id, course_id, status, grade) VALUES (%s, %s, %s, %s)',
+                    [student_id, course_id, status, grade]
+                )
+                summary['enrollments_created'] += 1
+
+        return summary
+
+    @staticmethod
+    def export_course_grades(course_id: int):
+        """Export a course's roster and grades to an Excel workbook."""
+        course = db.fetch_one(
+            '''
+            SELECT c.*, t.name AS teacher_name, t.teacher_no
+            FROM courses c
+            LEFT JOIN teachers t ON c.teacher_id = t.id
+            WHERE c.id = %s
+            ''',
+            [course_id]
+        )
+        if not course:
+            return None, None
+
+        enrollments = db.fetch_all(
+            '''
+            SELECT s.student_no, s.name AS student_name, s.major, e.grade, e.status
+            FROM enrollments e
+            JOIN students s ON e.student_id = s.id
+            WHERE e.course_id = %s
+            ORDER BY s.student_no
+            ''',
+            [course_id]
+        )
+
+        buffer = BytesIO()
+        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+            # Course info with Chinese headers
+            course_df = pd.DataFrame([{
+                '课程号': course.get('course_code'),
+                '课程名': course.get('name'),
+                '学分': course.get('credit'),
+                '容量': course.get('capacity'),
+                '授课教师': course.get('teacher_name'),
+                '教师工号': course.get('teacher_no')
+            }])
+            course_df.to_excel(writer, sheet_name='课程信息', index=False)
+
+            # Enrollment/grade data with Chinese headers
+            grades_df = pd.DataFrame(enrollments)
+            if not grades_df.empty:
+                grades_df = grades_df.rename(columns={
+                    'student_no': '学号',
+                    'student_name': '姓名',
+                    'major': '专业',
+                    'grade': '成绩',
+                    'status': '状态'
+                })
+            else:  # ensure headers exist even when empty
+                grades_df = pd.DataFrame(columns=['学号', '姓名', '专业', '成绩', '状态'])
+            grades_df.to_excel(writer, sheet_name='成绩名单', index=False)
+        buffer.seek(0)
+
+        teacher_part = course.get('teacher_name') or '未指定教师'
+        course_part = course.get('name') or f'课程{course_id}'
+        timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+        safe_course = course_part.replace('/', '-')
+        safe_teacher = teacher_part.replace('/', '-')
+        filename = f"{safe_course}-{safe_teacher}-{timestamp}.xlsx"
+        return buffer, filename
     
     # ========== Students ========== #
     
