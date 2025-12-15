@@ -81,13 +81,25 @@ class AdminService:
 
             teacher_no = str(row.get('teacher_no', '')).strip()
             teacher_name = str(row.get('teacher_name', '')).strip()
+            # 支持从导入名单中提取教师院系，优先使用 teacher_department，其次 department
+            teacher_department = str(row.get('teacher_department', '')).strip() or str(row.get('department', '')).strip()
             teacher_id = None
             if teacher_no:
                 if teacher_no in teacher_map:
                     teacher_id = teacher_map[teacher_no]
+                    # 如果已有教师记录但未填写院系，且本次导入提供了院系，则进行补全
+                    if teacher_department:
+                        db.execute(
+                            """
+                            UPDATE teachers
+                            SET department=%s
+                            WHERE id=%s AND (department IS NULL OR department='')
+                            """,
+                            [teacher_department, teacher_id]
+                        )
                 else:
                     t_name = teacher_name or teacher_no
-                    teacher_id = AdminService.create_teacher(teacher_no, t_name)
+                    teacher_id = AdminService.create_teacher(teacher_no, t_name, teacher_department)
                     teacher_map[teacher_no] = teacher_id
                     summary['teachers_created'] += 1
 
@@ -363,7 +375,7 @@ class AdminService:
                        course_id: Optional[int] = None) -> List[Dict[str, Any]]:
         """Get all enrollments with optional filtering."""
         sql = '''
-            SELECT e.*, s.name AS student_name, c.name AS course_name, t.name AS teacher_name
+            SELECT e.*, s.name AS student_name, s.student_no, c.name AS course_name, t.name AS teacher_name
             FROM enrollments e
             JOIN students s ON e.student_id = s.id
             JOIN courses c ON e.course_id = c.id

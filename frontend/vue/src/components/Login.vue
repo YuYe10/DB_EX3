@@ -14,6 +14,8 @@
             required 
             placeholder="学号/工号/admin"
             autocomplete="username"
+            @keydown="handleKeydown"
+            autofocus
           />
         </div>
         
@@ -25,6 +27,7 @@
             required 
             placeholder="请输入密码"
             autocomplete="current-password"
+            @keydown="handleKeydown"
           />
         </div>
         
@@ -51,7 +54,7 @@
 </template>
 
 <script setup>
-import { reactive, ref } from 'vue'
+import { reactive, ref, onMounted } from 'vue'
 
 const emit = defineEmits(['login-success'])
 
@@ -65,7 +68,25 @@ const errorMsg = ref('')
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:5000/api'
 
+// 从localStorage读取记忆的账号
+onMounted(() => {
+  const savedUsername = localStorage.getItem('login_username')
+  if (savedUsername) {
+    form.username = savedUsername
+  }
+})
+
 async function handleLogin() {
+  // 前端验证
+  if (!form.username.trim()) {
+    errorMsg.value = '请输入账号'
+    return
+  }
+  if (!form.password) {
+    errorMsg.value = '请输入密码'
+    return
+  }
+  
   loading.value = true
   errorMsg.value = ''
   
@@ -80,16 +101,25 @@ async function handleLogin() {
     const data = await res.json()
     
     if (!res.ok) {
-      errorMsg.value = data.message || '登录失败'
+      errorMsg.value = data.message || '登录失败，请检查账号和密码'
       return
     }
     
+    // 登录成功，记忆账号
+    localStorage.setItem('login_username', form.username)
     emit('login-success', data.user)
   } catch (error) {
-    errorMsg.value = '网络错误，请检查后端服务'
+    errorMsg.value = '网络错误，请检查后端服务或网络连接'
     console.error(error)
   } finally {
     loading.value = false
+  }
+}
+
+// 支持Enter键快速登录
+function handleKeydown(e) {
+  if (e.key === 'Enter') {
+    handleLogin()
   }
 }
 </script>

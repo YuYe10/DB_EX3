@@ -15,9 +15,27 @@
       <!-- 可选课程 -->
       <section class="card">
         <h2>📚 可选课程</h2>
+        <div class="search-filter">
+          <input 
+            v-model="searchKeyword" 
+            type="text" 
+            placeholder="搜索课程名称或教师..."
+            class="search-input"
+          />
+          <select v-model="filterCredit" class="filter-select">
+            <option value="">所有学分</option>
+            <option value="1">1学分</option>
+            <option value="2">2学分</option>
+            <option value="3">3学分</option>
+            <option value="4">4学分</option>
+            <option value="5">5学分+</option>
+          </select>
+        </div>
         <div class="course-list">
-          <div v-if="availableCourses.length === 0" class="empty">暂无可选课程</div>
-          <div v-for="c in availableCourses" :key="c.id" class="course-item">
+          <div v-if="filteredCourses.length === 0" class="empty">
+            {{ availableCourses.length === 0 ? '暂无可选课程' : '没有符合条件的课程' }}
+          </div>
+          <div v-for="c in filteredCourses" :key="c.id" class="course-item">
             <div class="course-info">
               <div class="course-code">{{ c.course_code }}</div>
               <div class="course-details">
@@ -25,10 +43,17 @@
                 <div class="course-meta">
                   教师: {{ c.teacher_name || '待定' }} · {{ c.credit }}学分 · 
                   已选{{ c.enrolled_count }}/{{ c.capacity }}
+                  <span v-if="c.enrolled_count >= c.capacity" class="full-badge">已满</span>
                 </div>
               </div>
             </div>
-            <button @click="enrollCourse(c.id)" class="btn-enroll">选课</button>
+            <button 
+              @click="enrollCourse(c.id)" 
+              class="btn-enroll"
+              :disabled="c.enrolled_count >= c.capacity"
+            >
+              {{ c.enrolled_count >= c.capacity ? '已满' : '选课' }}
+            </button>
           </div>
         </div>
       </section>
@@ -81,7 +106,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 
 const props = defineProps({
   user: {
@@ -98,10 +123,34 @@ const availableCourses = ref([])
 const myEnrollments = ref([])
 const showChangePassword = ref(false)
 const errorMsg = ref('')
+const searchKeyword = ref('')
+const filterCredit = ref('')
 
 const passwordForm = reactive({
   old_password: '',
   new_password: ''
+})
+
+// 计算筛选后的课程
+const filteredCourses = computed(() => {
+  return availableCourses.value.filter(c => {
+    // 搜索关键词过滤
+    if (searchKeyword.value) {
+      const keyword = searchKeyword.value.toLowerCase()
+      const matchName = c.name.toLowerCase().includes(keyword)
+      const matchTeacher = (c.teacher_name || '').toLowerCase().includes(keyword)
+      if (!matchName && !matchTeacher) return false
+    }
+    
+    // 学分过滤
+    if (filterCredit.value) {
+      const credit = parseFloat(c.credit || 0)
+      if (filterCredit.value === '5' && credit < 5) return false
+      if (filterCredit.value !== '5' && credit !== parseFloat(filterCredit.value)) return false
+    }
+    
+    return true
+  })
 })
 
 async function api(path, options = {}) {
@@ -269,6 +318,31 @@ onMounted(() => {
   font-weight: 700;
 }
 
+.search-filter {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.search-input, .filter-select {
+  padding: 10px 12px;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 13px;
+  outline: none;
+  transition: all 0.2s;
+}
+
+.search-input {
+  flex: 1;
+  min-width: 200px;
+}
+
+.search-input:focus, .filter-select:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
 .course-list, .enrollment-list {
   display: flex;
   flex-direction: column;
@@ -352,9 +426,26 @@ onMounted(() => {
   white-space: nowrap;
 }
 
-.btn-enroll:hover {
+.btn-enroll:hover:not(:disabled) {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.btn-enroll:disabled {
+  background: #cbd5e1;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.full-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 6px;
+  background: #fee2e2;
+  color: #b91c1c;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .enrollment-item {

@@ -4,7 +4,7 @@ Usage:
     python generate_sample_excel.py
 
 It creates sample_import.xlsx in the current directory with sheets:
-- courses     (course_code, name, credit, capacity, teacher_no, teacher_name)
+- courses     (course_code, name, credit, capacity, teacher_no, teacher_name, teacher_department)
 - students    (student_no, name, major)
 - enrollments (course_code, student_no, grade, status)
 """
@@ -23,6 +23,7 @@ def main():
             "capacity": 60,
             "teacher_no": "T001",
             "teacher_name": "张老师",
+            "teacher_department": "计算机学院",
         },
         {
             "course_code": "C002",
@@ -31,6 +32,7 @@ def main():
             "capacity": 50,
             "teacher_no": "T002",
             "teacher_name": "李老师",
+            "teacher_department": "软件学院",
         },
     ])
 

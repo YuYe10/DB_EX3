@@ -35,6 +35,29 @@
               容量{{ selectedCourse.capacity }}
             </p>
           </div>
+
+          <div class="course-actions">
+            <button class="btn-primary" @click="exportGrades" :disabled="!selectedCourseId || exportLoading">
+              {{ exportLoading ? '导出中...' : '导出成绩Excel' }}
+            </button>
+            <label class="upload-btn">
+              <input type="file" accept=".xlsx,.xls" @change="importRoster" :disabled="importLoading">
+              <span>{{ importLoading ? '正在导入...' : '导入课程名单' }}</span>
+            </label>
+            <button class="btn-secondary" @click="downloadSample" :disabled="importLoading || exportLoading">
+              下载示例名单
+            </button>
+          </div>
+          <p class="error" v-if="exportError">{{ exportError }}</p>
+          <p class="error" v-if="importError">{{ importError }}</p>
+          <div class="import-summary" v-if="importSummary">
+            <p>课程：{{ importSummary.course_name }} ({{ importSummary.course_code }})</p>
+            <p>
+              学生新增 {{ importSummary.students_created }}，跳过 {{ importSummary.students_skipped }}；
+              选课新增 {{ importSummary.enrollments_created }}，跳过 {{ importSummary.enrollments_skipped }}
+            </p>
+            <p>课程创建 {{ importSummary.course_created }}，更新 {{ importSummary.course_updated }}</p>
+          </div>
           
           <div class="student-list">
             <div v-if="students.length === 0" class="empty-small">暂无学生选课</div>
@@ -142,6 +165,11 @@ const errorMsg = ref('')
 const pwdErrorMsg = ref('')
 const gradeForm = reactive({ grade: null })
 const passwordForm = reactive({ old_password: '', new_password: '' })
+const exportLoading = ref(false)
+const exportError = ref('')
+const importLoading = ref(false)
+const importError = ref('')
+const importSummary = ref(null)
 
 const selectedCourse = computed(() => myCourses.value.find(c => c.id === selectedCourseId.value))
 
@@ -156,6 +184,12 @@ async function api(path, options = {}) {
     throw new Error(data.message || '操作失败')
   }
   return res.json()
+}
+
+const timestamp = () => {
+  const d = new Date()
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`
 }
 
 async function loadCourses() {
@@ -217,6 +251,98 @@ async function changePassword() {
 
 function handleLogout() {
   emit('logout')
+}
+
+async function exportGrades() {
+  if (!selectedCourseId.value) return
+  exportError.value = ''
+  exportLoading.value = true
+  try {
+    const res = await fetch(`${API_BASE}/teacher/courses/${selectedCourseId.value}/grades/export`, {
+      credentials: 'include'
+    })
+    if (!res.ok) throw new Error(await res.text())
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const cd = res.headers.get('Content-Disposition') || ''
+    let filename = ''
+    const match = cd.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
+    if (match && match[1]) {
+      filename = match[1].replace(/['"]/g, '')
+    }
+    if (!filename) {
+      const course = selectedCourse.value
+      const courseName = (course?.name || '课程').replace(/\//g, '-')
+      const teacherName = (props.user?.name || '教师').replace(/\//g, '-')
+      filename = `${courseName}-${teacherName}-${timestamp()}.xlsx`
+    }
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  } catch (error) {
+    exportError.value = error.message
+  } finally {
+    exportLoading.value = false
+  }
+}
+
+async function importRoster(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+  importError.value = ''
+  importSummary.value = null
+  importLoading.value = true
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    const res = await fetch(`${API_BASE}/teacher/courses/import`, {
+      method: 'POST',
+      credentials: 'include',
+      body: formData
+    })
+    const data = await res.json()
+    if (!res.ok || data.success === false) throw new Error(data.message || '导入失败')
+    importSummary.value = data.summary
+    await loadCourses()
+    if (data.summary?.course_id) {
+      await selectCourse(data.summary.course_id)
+    }
+  } catch (error) {
+    importError.value = error.message
+  } finally {
+    importLoading.value = false
+    event.target.value = ''
+  }
+}
+
+async function downloadSample() {
+  importError.value = ''
+  exportError.value = ''
+  try {
+    const res = await fetch(`${API_BASE}/teacher/courses/import/sample`, {
+      credentials: 'include'
+    })
+    if (!res.ok) throw new Error(await res.text())
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const cd = res.headers.get('Content-Disposition') || ''
+    let filename = '课程名单示例.xlsx'
+    const match = cd.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
+    if (match && match[1]) filename = match[1].replace(/['"]/g, '')
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  } catch (error) {
+    importError.value = error.message
+  }
 }
 
 onMounted(() => loadCourses())
@@ -406,6 +532,52 @@ tbody tr:hover {
 .grade-display.empty {
   background: #fef3c7;
   color: #92400e;
+}
+
+.course-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 12px 0;
+}
+
+.upload-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: #6366f1;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 700;
+  border: none;
+  box-shadow: 0 8px 18px rgba(99, 102, 241, 0.25);
+  position: relative;
+  overflow: hidden;
+}
+
+.upload-btn input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.error {
+  color: #b91c1c;
+  font-size: 13px;
+  margin: 4px 0;
+}
+
+.import-summary {
+  background: #ecfdf3;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  margin-bottom: 10px;
 }
 
 .btn-grade {

@@ -118,11 +118,21 @@ def courses():
     except ValueError as e:
         return error_response(str(e))
     
+    try:
+        credit = float(payload.get('credit', 0))
+        capacity = int(payload.get('capacity', 50))
+        if credit < 0:
+            return error_response('学分不能为负')
+        if capacity <= 0:
+            return error_response('容量必须大于0')
+    except (ValueError, TypeError):
+        return error_response('学分与容量必须为数字')
+    
     course_id = AdminService.create_course(
         payload['course_code'],
         payload['name'],
-        payload.get('credit', 0),
-        payload.get('capacity', 50),
+        credit,
+        capacity,
         payload.get('teacher_id')
     )
     
@@ -185,9 +195,16 @@ def set_grade(enrollment_id: int):
     payload = request.get_json(force=True)
     
     if 'grade' not in payload:
-        return error_response('Grade is required')
+        return error_response('成绩为必填')
     
-    AdminService.set_grade(enrollment_id, payload['grade'])
+    try:
+        grade = float(payload['grade'])
+        if grade < 0 or grade > 100:
+            return error_response('成绩必须在0-100之间')
+    except (ValueError, TypeError):
+        return error_response('成绩必须为数字')
+    
+    AdminService.set_grade(enrollment_id, grade)
     return json_response(message='Grade updated successfully')
 
 

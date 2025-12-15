@@ -27,6 +27,10 @@
           <div class="stat-value">{{ stats.counts.enrollments }}</div>
           <div class="stat-label">选课</div>
         </div>
+        <div class="stat-card">
+          <div class="stat-value">{{ enrollmentRate }}</div>
+          <div class="stat-label">选课率</div>
+        </div>
         <button @click="handleLogout" class="btn-logout-hero">退出登录</button>
       </div>
     </header>
@@ -53,17 +57,36 @@
           <button type="submit" class="btn-primary">+ 添加学生</button>
         </form>
         <div class="list" v-if="students.length">
-          <h3 class="list-title">📋 学生列表</h3>
-          <div class="item-card" v-for="s in students" :key="s.id">
-            <div class="item-content">
-              <div class="item-badge">{{ s.student_no }}</div>
-              <div class="item-details">
-                <div class="item-name">{{ s.name }}</div>
-                <div class="item-meta">{{ s.major || '未填专业' }}</div>
+          <div class="list-header">
+            <h3 class="list-title">📋 学生列表 ({{ filteredStudents.length }}/{{ students.length }})</h3>
+            <button class="btn-collapse" @click="studentsCollapsed = !studentsCollapsed">
+              {{ studentsCollapsed ? '展开 ▼' : '折叠 ▲' }}
+            </button>
+          </div>
+          <div class="search-box" v-show="!studentsCollapsed">
+            <input 
+              v-model="studentSearch" 
+              placeholder="🔍 搜索学号、姓名或专业..." 
+              class="search-input"
+            />
+          </div>
+          <transition name="collapse">
+            <div v-show="!studentsCollapsed">
+              <div class="item-card" v-for="s in filteredStudents" :key="s.id">
+                <div class="item-content">
+                  <div class="item-badge">{{ s.student_no }}</div>
+                  <div class="item-details">
+                    <div class="item-name">{{ s.name }}</div>
+                    <div class="item-meta">{{ s.major || '未填专业' }}</div>
+                  </div>
+                </div>
+                <button class="btn-danger-sm" @click="deleteStudent(s.id)">删除</button>
+              </div>
+              <div class="empty-state" v-if="filteredStudents.length === 0 && studentSearch">
+                <p>未找到匹配的学生</p>
               </div>
             </div>
-            <button class="btn-danger-sm" @click="deleteStudent(s.id)">删除</button>
-          </div>
+          </transition>
         </div>
         <div class="empty-state" v-else>
           <p>暂无学生记录</p>
@@ -91,17 +114,36 @@
           <button type="submit" class="btn-primary">+ 添加教师</button>
         </form>
         <div class="list" v-if="teachers.length">
-          <h3 class="list-title">📋 教师列表</h3>
-          <div class="item-card" v-for="t in teachers" :key="t.id">
-            <div class="item-content">
-              <div class="item-badge" style="background: #f3e8ff; color: #6d28d9;">{{ t.teacher_no }}</div>
-              <div class="item-details">
-                <div class="item-name">{{ t.name }}</div>
-                <div class="item-meta">{{ t.department || '未填院系' }}</div>
+          <div class="list-header">
+            <h3 class="list-title">📋 教师列表 ({{ filteredTeachers.length }}/{{ teachers.length }})</h3>
+            <button class="btn-collapse" @click="teachersCollapsed = !teachersCollapsed">
+              {{ teachersCollapsed ? '展开 ▼' : '折叠 ▲' }}
+            </button>
+          </div>
+          <div class="search-box" v-show="!teachersCollapsed">
+            <input 
+              v-model="teacherSearch" 
+              placeholder="🔍 搜索工号、姓名或院系..." 
+              class="search-input"
+            />
+          </div>
+          <transition name="collapse">
+            <div v-show="!teachersCollapsed">
+              <div class="item-card" v-for="t in filteredTeachers" :key="t.id">
+                <div class="item-content">
+                  <div class="item-badge" style="background: #f3e8ff; color: #6d28d9;">{{ t.teacher_no }}</div>
+                  <div class="item-details">
+                    <div class="item-name">{{ t.name }}</div>
+                    <div class="item-meta">{{ t.department || '未填院系' }}</div>
+                  </div>
+                </div>
+                <button class="btn-danger-sm" @click="deleteTeacher(t.id)">删除</button>
+              </div>
+              <div class="empty-state" v-if="filteredTeachers.length === 0 && teacherSearch">
+                <p>未找到匹配的教师</p>
               </div>
             </div>
-            <button class="btn-danger-sm" @click="deleteTeacher(t.id)">删除</button>
-          </div>
+          </transition>
         </div>
         <div class="empty-state" v-else>
           <p>暂无教师记录</p>
@@ -140,17 +182,36 @@
           <button type="submit" class="btn-primary">+ 添加课程</button>
         </form>
         <div class="list" v-if="courses.length">
-          <h3 class="list-title">📋 课程列表</h3>
-          <div class="item-card" v-for="c in courses" :key="c.id">
-            <div class="item-content">
-              <div class="item-badge" style="background: #fce7f3; color: #be185d;">{{ c.course_code }}</div>
-              <div class="item-details">
-                <div class="item-name">{{ c.name }}</div>
-                <div class="item-meta">{{ c.teacher_name || '暂无教师' }} · {{ c.credit }}学分</div>
+          <div class="list-header">
+            <h3 class="list-title">📋 课程列表 ({{ filteredCourses.length }}/{{ courses.length }})</h3>
+            <button class="btn-collapse" @click="coursesCollapsed = !coursesCollapsed">
+              {{ coursesCollapsed ? '展开 ▼' : '折叠 ▲' }}
+            </button>
+          </div>
+          <div class="search-box" v-show="!coursesCollapsed">
+            <input 
+              v-model="courseSearch" 
+              placeholder="🔍 搜索课程号、课程名或教师..." 
+              class="search-input"
+            />
+          </div>
+          <transition name="collapse">
+            <div v-show="!coursesCollapsed">
+              <div class="item-card" v-for="c in filteredCourses" :key="c.id">
+                <div class="item-content">
+                  <div class="item-badge" style="background: #fce7f3; color: #be185d;">{{ c.course_code }}</div>
+                  <div class="item-details">
+                    <div class="item-name">{{ c.name }}</div>
+                    <div class="item-meta">{{ c.teacher_name || '暂无教师' }} · {{ c.credit }}学分</div>
+                  </div>
+                </div>
+                <button class="btn-danger-sm" @click="deleteCourse(c.id)">删除</button>
+              </div>
+              <div class="empty-state" v-if="filteredCourses.length === 0 && courseSearch">
+                <p>未找到匹配的课程</p>
               </div>
             </div>
-            <button class="btn-danger-sm" @click="deleteCourse(c.id)">删除</button>
-          </div>
+          </transition>
         </div>
         <div class="empty-state" v-else>
           <p>暂无课程记录</p>
@@ -183,27 +244,46 @@
         </form>
 
         <div class="list" v-if="enrollments.length">
-          <h3 class="list-title">📋 选课记录</h3>
-          <div class="enrollment-item" v-for="e in enrollments" :key="e.id">
-            <div class="enrollment-info">
-              <div class="enrollment-header">
-                <strong>{{ e.student_name }}</strong>
-                <span class="divider">→</span>
-                <strong>{{ e.course_name }}</strong>
-              </div>
-              <div class="enrollment-meta">
-                <span>教师: {{ e.teacher_name || '未分配' }}</span>
-                <span class="grade-tag" v-if="e.grade !== null">成绩: <strong>{{ e.grade }}</strong></span>
-              </div>
-            </div>
-            <div class="enrollment-actions">
-              <div class="grade-input-group">
-                <input type="number" step="0.5" placeholder="输入成绩" v-model.number="gradeInput[e.id]" />
-                <button class="btn-success-sm" @click="setGrade(e.id)" type="button">更新</button>
-              </div>
-              <button class="btn-danger-sm" @click="dropCourse(e.id)">退课</button>
-            </div>
+          <div class="list-header">
+            <h3 class="list-title">📋 选课记录 ({{ filteredEnrollments.length }}/{{ enrollments.length }})</h3>
+            <button class="btn-collapse" @click="enrollmentsCollapsed = !enrollmentsCollapsed">
+              {{ enrollmentsCollapsed ? '展开 ▼' : '折叠 ▲' }}
+            </button>
           </div>
+          <div class="search-box" v-show="!enrollmentsCollapsed">
+            <input 
+              v-model="enrollmentSearch" 
+              placeholder="🔍 搜索学生、学号、课程或教师..." 
+              class="search-input"
+            />
+          </div>
+          <transition name="collapse">
+            <div v-show="!enrollmentsCollapsed">
+              <div class="enrollment-item" v-for="e in filteredEnrollments" :key="e.id">
+                <div class="enrollment-info">
+                  <div class="enrollment-header">
+                    <strong>{{ e.student_name }} ({{ e.student_no }})</strong>
+                    <span class="divider">→</span>
+                    <strong>{{ e.course_name }}</strong>
+                  </div>
+                  <div class="enrollment-meta">
+                    <span>教师: {{ e.teacher_name || '未分配' }}</span>
+                    <span class="grade-tag" v-if="e.grade !== null">成绩: <strong>{{ e.grade }}</strong></span>
+                  </div>
+                </div>
+                <div class="enrollment-actions">
+                  <div class="grade-input-group">
+                    <input type="number" step="0.5" placeholder="输入成绩" v-model.number="gradeInput[e.id]" />
+                    <button class="btn-success-sm" @click="setGrade(e.id)" type="button">更新</button>
+                  </div>
+                  <button class="btn-danger-sm" @click="dropCourse(e.id)">退课</button>
+                </div>
+              </div>
+              <div class="empty-state" v-if="filteredEnrollments.length === 0 && enrollmentSearch">
+                <p>未找到匹配的选课记录</p>
+              </div>
+            </div>
+          </transition>
         </div>
         <div class="empty-state" v-else>
           <p>暂无选课记录</p>
@@ -303,7 +383,68 @@ const courseForm = reactive({ course_code: '', name: '', credit: 0, capacity: 50
 const enrollForm = reactive({ student_id: '', course_id: '' })
 const gradeInput = reactive({})
 
+// 折叠状态
+const studentsCollapsed = ref(false)
+const teachersCollapsed = ref(false)
+const coursesCollapsed = ref(false)
+const enrollmentsCollapsed = ref(false)
+
+// 搜索/筛选条件
+const studentSearch = ref('')
+const teacherSearch = ref('')
+const courseSearch = ref('')
+const enrollmentSearch = ref('')
+
 const healthText = computed(() => (health.db ? '连接正常' : '等待连接'))
+
+// 计算选课率
+const enrollmentRate = computed(() => {
+  if (!stats.counts || stats.counts.students === 0) return '0%'
+  const rate = (stats.counts.enrollments / (stats.counts.students * stats.counts.courses || 1)) * 100
+  return rate > 100 ? '100%+' : `${Math.round(rate)}%`
+})
+
+// 筛选后的列表
+const filteredStudents = computed(() => {
+  if (!studentSearch.value) return students.value
+  const search = studentSearch.value.toLowerCase()
+  return students.value.filter(s => 
+    s.name.toLowerCase().includes(search) ||
+    s.student_no.toLowerCase().includes(search) ||
+    (s.major && s.major.toLowerCase().includes(search))
+  )
+})
+
+const filteredTeachers = computed(() => {
+  if (!teacherSearch.value) return teachers.value
+  const search = teacherSearch.value.toLowerCase()
+  return teachers.value.filter(t => 
+    t.name.toLowerCase().includes(search) ||
+    t.teacher_no.toLowerCase().includes(search) ||
+    (t.department && t.department.toLowerCase().includes(search))
+  )
+})
+
+const filteredCourses = computed(() => {
+  if (!courseSearch.value) return courses.value
+  const search = courseSearch.value.toLowerCase()
+  return courses.value.filter(c => 
+    c.name.toLowerCase().includes(search) ||
+    c.course_code.toLowerCase().includes(search) ||
+    (c.teacher_name && c.teacher_name.toLowerCase().includes(search))
+  )
+})
+
+const filteredEnrollments = computed(() => {
+  if (!enrollmentSearch.value) return enrollments.value
+  const search = enrollmentSearch.value.toLowerCase()
+  return enrollments.value.filter(e => 
+    e.student_name.toLowerCase().includes(search) ||
+    e.student_no.toLowerCase().includes(search) ||
+    e.course_name.toLowerCase().includes(search) ||
+    (e.teacher_name && e.teacher_name.toLowerCase().includes(search))
+  )
+})
 
 function handleLogout() {
   emit('logout')
@@ -352,8 +493,14 @@ async function createStudent() {
 }
 
 async function deleteStudent(id) {
-  await api(`/students/${id}`, { method: 'DELETE' })
-  await loadAll()
+  const student = students.value.find(s => s.id === id)
+  if (!confirm(`确定要删除学生 "${student?.name}" 吗？`)) return
+  try {
+    await api(`/students/${id}`, { method: 'DELETE' })
+    await loadAll()
+  } catch (err) {
+    alert(`删除失败: ${err.message}`)
+  }
 }
 
 async function createTeacher() {
@@ -363,8 +510,14 @@ async function createTeacher() {
 }
 
 async function deleteTeacher(id) {
-  await api(`/teachers/${id}`, { method: 'DELETE' })
-  await loadAll()
+  const teacher = teachers.value.find(t => t.id === id)
+  if (!confirm(`确定要删除教师 "${teacher?.name}" 吗？`)) return
+  try {
+    await api(`/teachers/${id}`, { method: 'DELETE' })
+    await loadAll()
+  } catch (err) {
+    alert(`删除失败: ${err.message}`)
+  }
 }
 
 async function createCourse() {
@@ -374,8 +527,14 @@ async function createCourse() {
 }
 
 async function deleteCourse(id) {
-  await api(`/courses/${id}`, { method: 'DELETE' })
-  await loadAll()
+  const course = courses.value.find(c => c.id === id)
+  if (!confirm(`确定要删除课程 "${course?.name}" 吗？`)) return
+  try {
+    await api(`/courses/${id}`, { method: 'DELETE' })
+    await loadAll()
+  } catch (err) {
+    alert(`删除失败: ${err.message}`)
+  }
 }
 
 async function enroll() {
@@ -388,13 +547,23 @@ async function enroll() {
 async function setGrade(id) {
   const grade = gradeInput[id]
   if (grade === undefined || grade === '') return
-  await api(`/enrollments/${id}/grade`, { method: 'PUT', body: JSON.stringify({ grade }) })
-  await loadAll()
+  try {
+    await api(`/enrollments/${id}/grade`, { method: 'PUT', body: JSON.stringify({ grade }) })
+    await loadAll()
+  } catch (err) {
+    alert(`成绩更新失败: ${err.message}`)
+  }
 }
 
 async function dropCourse(id) {
-  await api(`/enrollments/${id}`, { method: 'DELETE' })
-  await loadAll()
+  const enrollment = enrollments.value.find(e => e.id === id)
+  if (!confirm(`确定要删除 "${enrollment?.student_name}" 选的 "${enrollment?.course_name}" 吗？`)) return
+  try {
+    await api(`/enrollments/${id}`, { method: 'DELETE' })
+    await loadAll()
+  } catch (err) {
+    alert(`删除选课失败: ${err.message}`)
+  }
 }
 
 async function importExcel(event) {
@@ -434,8 +603,14 @@ async function exportGrades() {
     if (!res.ok) throw new Error(await res.text())
     const blob = await res.blob()
     const url = URL.createObjectURL(blob)
-    const course = courses.value.find(c => c.id === exportCourseId.value) || {}
-    const filename = `成绩单_${course.course_code || course.name || 'course'}.xlsx`
+    
+    // 构造文件名：<课程名称>-<老师名称>-<导出时间>.xlsx
+    const course = courses.value.find(c => c.id === exportCourseId.value)
+    const courseName = (course?.name || '未知课程').replace(/\//g, '-')
+    const teacherName = (course?.teacher_name || '未指定教师').replace(/\//g, '-')
+    const timestamp = new Date().toISOString().slice(0, 19).replace(/T/, '-').replace(/:/g, '')
+    const filename = `${courseName}-${teacherName}-${timestamp}.xlsx`
+    
     const a = document.createElement('a')
     a.href = url
     a.download = filename
@@ -1096,6 +1271,77 @@ input:focus, select:focus {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+}
+
+/* ===== 折叠与搜索功能样式 ===== */
+.list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.list-header .list-title {
+  margin: 0;
+}
+
+.btn-collapse {
+  padding: 6px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: white;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.btn-collapse:hover {
+  border-color: var(--accent, #3b82f6);
+  color: var(--accent, #3b82f6);
+  background: #f8fafc;
+}
+
+.search-box {
+  margin-bottom: 12px;
+}
+
+.search-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 13px;
+  background: white;
+  transition: all 0.3s ease;
+  outline: none;
+}
+
+.search-input::placeholder {
+  color: #94a3b8;
+}
+
+.search-input:focus {
+  border-color: var(--accent, #3b82f6);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  transform: translateY(-1px);
+}
+
+/* 折叠动画 */
+.collapse-enter-active,
+.collapse-leave-active {
+  transition: all 0.3s ease;
+  max-height: 2000px;
+  overflow: hidden;
+}
+
+.collapse-enter-from,
+.collapse-leave-to {
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(-10px);
 }
 
 /* ===== RESPONSIVE DESIGN ===== */
