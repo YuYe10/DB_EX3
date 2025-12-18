@@ -4,13 +4,14 @@ Tests can run without database or Flask context.
 """
 import unittest
 from unittest.mock import patch, MagicMock, Mock
-from repository import StudentRepository, CourseRepository, EnrollmentRepository
+
+from app_core.repository import StudentRepository, CourseRepository, EnrollmentRepository
 
 
 class TestStudentRepository(unittest.TestCase):
     """Test StudentRepository in isolation."""
 
-    @patch('repository.db')
+    @patch('app_core.repository.db')
     def test_find_by_id(self, mock_db):
         """Test finding student by ID."""
         mock_db.fetch_one.return_value = {
@@ -23,7 +24,7 @@ class TestStudentRepository(unittest.TestCase):
         assert result['name'] == '张三'
         mock_db.fetch_one.assert_called_once()
 
-    @patch('repository.db')
+    @patch('app_core.repository.db')
     def test_find_by_no(self, mock_db):
         """Test finding student by student number."""
         mock_db.fetch_one.return_value = {
@@ -36,7 +37,7 @@ class TestStudentRepository(unittest.TestCase):
         assert result['student_no'] == 'S001'
         mock_db.fetch_one.assert_called_once()
 
-    @patch('repository.db')
+    @patch('app_core.repository.db')
     def test_find_all(self, mock_db):
         """Test finding all students."""
         mock_db.fetch_all.return_value = [
@@ -50,7 +51,7 @@ class TestStudentRepository(unittest.TestCase):
         assert len(result) == 2
         mock_db.fetch_all.assert_called_once()
 
-    @patch('repository.db')
+    @patch('app_core.repository.db')
     def test_create_student(self, mock_db):
         """Test creating a student."""
         mock_db.execute_returning.return_value = 1
@@ -66,7 +67,7 @@ class TestStudentRepository(unittest.TestCase):
         assert student_id == 1
         mock_db.execute_returning.assert_called_once()
 
-    @patch('repository.db')
+    @patch('app_core.repository.db')
     def test_update_student(self, mock_db):
         """Test updating a student."""
         mock_db.execute.return_value = True
@@ -77,7 +78,7 @@ class TestStudentRepository(unittest.TestCase):
         assert result is True
         mock_db.execute.assert_called_once()
 
-    @patch('repository.db')
+    @patch('app_core.repository.db')
     def test_delete_student(self, mock_db):
         """Test deleting a student."""
         mock_db.execute.return_value = True
@@ -88,7 +89,7 @@ class TestStudentRepository(unittest.TestCase):
         assert result is True
         mock_db.execute.assert_called_once()
 
-    @patch('repository.db')
+    @patch('app_core.repository.db')
     def test_search_with_keyword(self, mock_db):
         """Test searching students with keyword."""
         mock_db.fetch_all.return_value = [
@@ -108,9 +109,9 @@ class TestServiceWithRepository(unittest.TestCase):
     def test_student_service_isolation(self):
         """Demonstrate Service independence from Database."""
         # Import here to avoid import errors
-        from services.student_service import StudentService
+        from app_core.services.student_service import StudentService
 
-        with patch('repository.RepositoryContainer') as mock_container:
+        with patch('app_core.repository.RepositoryContainer') as mock_container:
             # Mock the repository
             mock_repo = MagicMock()
             mock_repo.find_by_id.return_value = {
@@ -131,10 +132,9 @@ class TestDecoupling(unittest.TestCase):
         # If we change API response format, service code doesn't change
         # Service only cares about business logic, not HTTP
 
-        from repository import StudentRepository
         from unittest.mock import patch
 
-        with patch('repository.db') as mock_db:
+        with patch('app_core.repository.db') as mock_db:
             mock_db.fetch_one.return_value = {'id': 1, 'name': 'Test'}
 
             repo = StudentRepository()
@@ -161,7 +161,7 @@ class TestDecoupling(unittest.TestCase):
         """Service tests don't require database."""
         from unittest.mock import patch
 
-        with patch('repository.StudentRepository') as MockRepo:
+        with patch('app_core.repository.StudentRepository') as MockRepo:
             mock_repo = MagicMock()
             mock_repo.find_by_id.return_value = {'id': 1, 'name': '测试'}
             MockRepo.return_value = mock_repo
@@ -211,7 +211,7 @@ class TestReusableComposables(unittest.TestCase):
 class TestIntegration(unittest.TestCase):
     """Integration tests showing decoupled layers work together."""
 
-    @patch('repository.db')
+    @patch('app_core.repository.db')
     def test_full_request_flow(self, mock_db):
         """Test a complete request flow with mocked database."""
         # Setup mocks

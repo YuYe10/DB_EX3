@@ -5,8 +5,9 @@ from typing import List, Dict, Any, Optional
 from io import BytesIO
 from datetime import datetime
 import pandas as pd
-from db import db
-from services.user_service import UserService
+
+from app_core.db import db
+from app_core.services.user_service import UserService
 
 
 class AdminService:

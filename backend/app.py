@@ -8,14 +8,16 @@ import os
 import logging
 import time
 
-from config import Config
-from services import UserService
-from api import auth_bp, student_bp, teacher_bp, admin_bp
-from middleware import deduplicate_request, log_operation
-from logger import setup_logging, log_request, log_response, log_auth, log_database, log_error
+from app_core.config import Config
+from app_core.services import UserService
+from app_core.api import auth_bp, student_bp, teacher_bp, admin_bp
+from app_core.middleware import deduplicate_request, log_operation
+from app_core.logger import setup_logging, log_request, log_response, log_auth, log_database, log_error
 
-# 设置日志系统
-setup_logging(log_dir='logs', console_level=logging.DEBUG, file_level=logging.INFO)
+# 设置日志系统（日志目录移动到 app_core/logs）
+BASE_DIR = os.path.dirname(__file__)
+LOG_DIR = os.path.join(BASE_DIR, 'app_core', 'logs')
+setup_logging(log_dir=LOG_DIR, console_level=logging.DEBUG, file_level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 

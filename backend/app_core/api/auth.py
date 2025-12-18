@@ -2,8 +2,9 @@
 Authentication routes blueprint.
 """
 from flask import Blueprint, request, session
-from services import UserService
-from utils import json_response, error_response, validate_fields, require_auth
+
+from app_core.services import UserService
+from app_core.utils import json_response, error_response, validate_fields, require_auth
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/api/auth')
 

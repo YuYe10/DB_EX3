@@ -8,8 +8,8 @@ from psycopg2.extras import RealDictCursor
 from sshtunnel import SSHTunnelForwarder
 from dotenv import load_dotenv
 
-# Load .env sitting one level above backend/
-ENV_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
+# Load .env sitting at repository root
+ENV_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), '.env')
 load_dotenv(ENV_PATH)
 
 

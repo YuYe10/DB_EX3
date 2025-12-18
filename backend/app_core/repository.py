@@ -4,7 +4,8 @@ Decouples business logic from database implementation.
 """
 from typing import List, Dict, Any, Optional
 from abc import ABC, abstractmethod
-from db import db
+
+from app_core.db import db
 
 
 class Repository(ABC):

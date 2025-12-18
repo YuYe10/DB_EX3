@@ -2,8 +2,9 @@
 Major Plan Service for managing professional training plans.
 """
 from typing import List, Dict, Any, Optional
-from db import db
 import logging
+
+from app_core.db import db
 
 logger = logging.getLogger(__name__)
 

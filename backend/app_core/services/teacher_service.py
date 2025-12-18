@@ -5,8 +5,8 @@ from typing import List, Dict, Any, Optional
 from typing import Tuple
 from io import BytesIO
 from datetime import datetime
-from db import db
-from services.admin_service import AdminService
+from app_core.db import db
+from app_core.services.admin_service import AdminService
 
 
 class TeacherService:

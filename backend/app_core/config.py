@@ -4,8 +4,13 @@ Configuration module for Flask application.
 import os
 from dotenv import load_dotenv
 
+
+APP_CORE_DIR = os.path.dirname(__file__)
+BACKEND_ROOT = os.path.dirname(APP_CORE_DIR)
+REPO_ROOT = os.path.dirname(BACKEND_ROOT)
+
 # Load environment variables
-ENV_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
+ENV_PATH = os.path.join(REPO_ROOT, '.env')
 load_dotenv(ENV_PATH)
 
 
@@ -20,6 +25,7 @@ class Config:
     
     # Session
     SESSION_TYPE = 'filesystem'
+    SESSION_FILE_DIR = os.path.join(APP_CORE_DIR, 'flask_session')
     SESSION_COOKIE_SAMESITE = 'Lax'
     SESSION_COOKIE_HTTPONLY = True
     SESSION_PERMANENT = False
@@ -41,3 +47,7 @@ class Config:
     DB_NAME = os.getenv('OG_DBNAME', 'student_db')
     DB_USER = os.getenv('OG_USER', 'appuser')
     DB_PASSWORD = os.getenv('OG_PASSWORD', '')
+
+
+# Ensure session directory exists inside app_core
+os.makedirs(Config.SESSION_FILE_DIR, exist_ok=True)

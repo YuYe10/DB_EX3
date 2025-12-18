@@ -473,7 +473,7 @@
 </template>
 
 <script setup>
-import { reactive, ref, onMounted, computed } from 'vue'
+import { reactive, ref, onMounted, computed, watch } from 'vue'
 
 const props = defineProps({
   user: { type: Object, required: true }
@@ -635,6 +635,7 @@ async function loadAll() {
   stats.counts = st.counts
   stats.course_avg = st.course_avg
   majorPlans.value = mp || []
+  await loadPlanCourseCounts()
 }
 
 async function createStudent() {
@@ -844,10 +845,43 @@ async function loadMajorPlanCourses() {
   }
 }
 
+// 加载所有培养计划的课程数量并更新列表展示
+async function loadPlanCourseCounts() {
+  if (!majorPlans.value.length) return
+  try {
+    const results = await Promise.all(
+      majorPlans.value.map(async (p) => {
+        try {
+          const data = await api(`/major-plans/${p.id}/courses`)
+          return { id: p.id, count: Array.isArray(data) ? data.length : 0 }
+        } catch (_) {
+          return { id: p.id, count: p.course_count ?? 0 }
+        }
+      })
+    )
+    const countMap = Object.fromEntries(results.map(r => [r.id, r.count]))
+    majorPlans.value = majorPlans.value.map(p => ({
+      ...p,
+      course_count: countMap[p.id] ?? (p.course_count ?? 0),
+    }))
+  } catch (err) {
+    console.error('加载培养计划课程数量失败:', err)
+  }
+}
+
 onMounted(async () => {
   await loadHealth()
   await loadAll()
 })
+
+// 当选择的培养计划变化时，自动加载该计划的课程
+watch(
+  () => planCourseForm.plan_id,
+  async (newPlanId) => {
+    selectedPlanId.value = newPlanId || ''
+    await loadMajorPlanCourses()
+  }
+)
 </script>
 
 <style scoped>

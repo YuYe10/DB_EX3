@@ -3,8 +3,8 @@ User service for authentication and user management.
 """
 from typing import Optional, Dict, Any
 from flask import session
-from db import db
-from utils import hash_password
+from app_core.db import db
+from app_core.utils import hash_password
 
 
 class UserService:

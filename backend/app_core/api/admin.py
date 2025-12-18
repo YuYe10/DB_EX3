@@ -2,9 +2,10 @@
 Admin routes blueprint.
 """
 from flask import Blueprint, request, jsonify, send_file
-from services import AdminService, MajorPlanService
-from utils import json_response, error_response, validate_fields, require_auth
-from utils.validators import validate_major_plan, validate_plan_course, validate_semester
+
+from app_core.services import AdminService, MajorPlanService
+from app_core.utils import json_response, error_response, validate_fields, require_auth
+from app_core.utils.validators import validate_major_plan, validate_plan_course, validate_semester
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/api')
 
@@ -265,7 +266,7 @@ def export_course_grades(course_id: int):
 @admin_bp.route('/health', methods=['GET'])
 def health_check():
     """Health check endpoint."""
-    from db import db
+    from app_core.db import db
     try:
         db.fetch_one("SELECT 1")
         return jsonify({'db': True})

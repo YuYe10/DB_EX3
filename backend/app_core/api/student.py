@@ -2,9 +2,10 @@
 Student routes blueprint.
 """
 from flask import Blueprint, request, session, jsonify
-from services import StudentService
-from utils import json_response, error_response, validate_fields, require_auth
-from utils.validators import validate_semester
+
+from app_core.services import StudentService
+from app_core.utils import json_response, error_response, validate_fields, require_auth
+from app_core.utils.validators import validate_semester
 
 student_bp = Blueprint('student', __name__, url_prefix='/api/student')
 

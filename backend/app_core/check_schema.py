@@ -1,5 +1,5 @@
 """检查 major_plans 表结构"""
-from db import db
+from app_core.db import db
 
 try:
     # 检查表结构

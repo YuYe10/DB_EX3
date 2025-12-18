@@ -2,7 +2,8 @@
 Student service for student-related operations.
 """
 from typing import List, Dict, Any, Optional
-from db import db
+
+from app_core.db import db
 
 
 class StudentService:
@@ -28,7 +29,7 @@ class StudentService:
             return []
         
         # Get major plan
-        from services.major_plan_service import MajorPlanService
+        from app_core.services.major_plan_service import MajorPlanService
         
         plan = MajorPlanService.get_plan_by_major(student['major'])
         if not plan:
@@ -72,7 +73,7 @@ class StudentService:
     @staticmethod
     def get_available_semesters(student_id: int) -> List[int]:
         """Get all available semesters for student's major plan."""
-        from services.major_plan_service import MajorPlanService
+        from app_core.services.major_plan_service import MajorPlanService
         
         student = StudentService.get_student_info(student_id)
         if not student or not student.get('major'):

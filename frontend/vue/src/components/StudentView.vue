@@ -41,11 +41,11 @@
           <div v-if="filteredCourses.length === 0" class="empty">
             {{ availableCourses.length === 0 ? '暂无可选课程' : '没有符合条件的课程' }}
           </div>
-          <div v-for="c in filteredCourses" :key="c.id" class="course-item">
+          <div v-for="c in filteredCourses" :key="c.course_id || c.id" class="course-item">
             <div class="course-info">
               <div class="course-code">{{ c.course_code }}</div>
               <div class="course-details">
-                <div class="course-name">{{ c.name }}</div>
+                <div class="course-name">{{ c.course_name || c.name }}</div>
                 <div class="course-meta">
                   教师: {{ c.teacher_name || '待定' }} · {{ c.credit }}学分 · 
                   已选{{ c.enrolled_count }}/{{ c.capacity }}
@@ -54,7 +54,7 @@
               </div>
             </div>
             <button 
-              @click="enrollCourse(c.id)" 
+              @click="enrollCourse(c.course_id || c.id)" 
               class="btn-enroll"
               :disabled="c.enrolled_count >= c.capacity"
             >
@@ -148,7 +148,8 @@ const filteredCourses = computed(() => {
     // 搜索关键词过滤
     if (searchKeyword.value) {
       const keyword = searchKeyword.value.toLowerCase()
-      const matchName = c.name.toLowerCase().includes(keyword)
+      const courseName = (c.course_name || c.name || '').toLowerCase()
+      const matchName = courseName.includes(keyword)
       const matchTeacher = (c.teacher_name || '').toLowerCase().includes(keyword)
       if (!matchName && !matchTeacher) return false
     }

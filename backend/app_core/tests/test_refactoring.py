@@ -9,7 +9,7 @@ print("=" * 60)
 # 1. 测试配置模块
 print("\n[1/6] 测试配置模块...")
 try:
-    from config import Config
+    from app_core.config import Config
     print(f"✅ Config导入成功")
     print(f"   - SECRET_KEY: {Config.SECRET_KEY[:20]}...")
     print(f"   - DEBUG: {Config.DEBUG}")
@@ -20,7 +20,7 @@ except Exception as e:
 # 2. 测试工具模块
 print("\n[2/6] 测试工具模块...")
 try:
-    from utils import hash_password, json_response, error_response, validate_fields
+    from app_core.utils import hash_password, json_response, error_response, validate_fields
     
     # 测试密码哈希
     hashed = hash_password("test123")
@@ -40,7 +40,7 @@ except Exception as e:
 # 3. 测试Services模块结构
 print("\n[3/6] 测试Services模块...")
 try:
-    import services
+    import app_core.services as services
     print(f"✅ Services包导入成功")
     print(f"   - UserService: {'UserService' in dir(services)}")
     print(f"   - StudentService: {'StudentService' in dir(services)}")
@@ -52,7 +52,7 @@ except Exception as e:
 # 4. 测试API蓝图模块
 print("\n[4/6] 测试API蓝图模块...")
 try:
-    from api import auth_bp, student_bp, teacher_bp, admin_bp
+    from app_core.api import auth_bp, student_bp, teacher_bp, admin_bp
     print(f"✅ API蓝图导入成功")
     print(f"   - auth_bp: {auth_bp.name} ({len(list(auth_bp.deferred_functions))} 个路由)")
     print(f"   - student_bp: {student_bp.name}")
@@ -78,8 +78,10 @@ try:
         def execute_returning(self, *args, **kwargs):
             return 1
     
-    # 替换db模块
-    sys.modules['db'] = type('MockModule', (), {'db': MockDB()})()
+    # 替换 db 模块路径（新结构位于 app_core.db）
+    mock_db_module = type('MockModule', (), {'db': MockDB()})()
+    sys.modules['app_core.db'] = mock_db_module
+    sys.modules['db'] = mock_db_module  # 向后兼容
     
     from app import create_app
     test_app = create_app()
@@ -112,29 +114,24 @@ except Exception as e:
 print("\n[6/6] 检查文件结构...")
 try:
     import os
-    backend_path = os.path.dirname(__file__)
+    from pathlib import Path
+
+    backend_root = Path(__file__).resolve().parents[2]
     
     required_files = [
         'app.py',
-        'config.py',
-        'utils.py',
         'main.py',
-        'services/__init__.py',
-        'services/user_service.py',
-        'services/student_service.py',
-        'services/teacher_service.py',
-        'services/admin_service.py',
-        'api/__init__.py',
-        'api/auth.py',
-        'api/student.py',
-        'api/teacher.py',
-        'api/admin.py',
+        'run.sh',
+        'app_core/config.py',
+        'app_core/utils/__init__.py',
+        'app_core/services/__init__.py',
+        'app_core/api/__init__.py',
     ]
     
     all_exist = True
     for file in required_files:
-        path = os.path.join(backend_path, file)
-        exists = os.path.exists(path)
+        path = backend_root / file
+        exists = path.exists()
         if not exists:
             print(f"   ❌ 缺失: {file}")
             all_exist = False
@@ -146,15 +143,13 @@ try:
     total_lines = 0
     for file in required_files:
         if file.endswith('.py'):
-            path = os.path.join(backend_path, file)
-            if os.path.exists(path):
+            path = backend_root / file
+            if path.exists():
                 with open(path, 'r', encoding='utf-8') as f:
                     lines = len(f.readlines())
                     total_lines += lines
     
     print(f"   总代码行数: {total_lines} 行")
-    print(f"   旧版 app.py: 606 行")
-    print(f"   模块化优势: 代码分散到 {len(required_files)} 个文件")
     
 except Exception as e:
     print(f"❌ 文件结构检查失败: {e}")

@@ -1,6 +1,7 @@
 """修复 major_plans 表的列名问题"""
-from db import db
 import sys
+
+from app_core.db import db
 
 def main():
     print("=" * 60)

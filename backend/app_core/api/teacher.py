@@ -2,8 +2,9 @@
 Teacher routes blueprint.
 """
 from flask import Blueprint, request, session, jsonify, send_file
-from services import TeacherService
-from utils import json_response, error_response, require_auth
+
+from app_core.services import TeacherService
+from app_core.utils import json_response, error_response, require_auth
 
 teacher_bp = Blueprint('teacher', __name__, url_prefix='/api/teacher')
 

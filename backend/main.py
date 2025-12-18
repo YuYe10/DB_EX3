@@ -1,6 +1,8 @@
 import logging
-from app import app, Config
-from logger import Colors
+
+from app import app
+from app_core.config import Config
+from app_core.logger import Colors
 
 logger = logging.getLogger(__name__)
 
