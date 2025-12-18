@@ -171,6 +171,66 @@ class Database:
             """
             CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
             """,
+                        """
+                        ALTER TABLE enrollments ALTER COLUMN student_id SET NOT NULL;
+                        """,
+                        """
+                        ALTER TABLE enrollments ALTER COLUMN course_id SET NOT NULL;
+                        """,
+                        """
+                        ALTER TABLE major_plan_courses ALTER COLUMN plan_id SET NOT NULL;
+                        """,
+                        """
+                        ALTER TABLE major_plan_courses ALTER COLUMN course_id SET NOT NULL;
+                        """,
+                        """
+                        DO $$
+                        BEGIN
+                            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'courses_credit_nonneg') THEN
+                                ALTER TABLE courses ADD CONSTRAINT courses_credit_nonneg CHECK (credit >= 0);
+                            END IF;
+                        END $$;
+                        """,
+                        """
+                        DO $$
+                        BEGIN
+                            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'courses_capacity_positive') THEN
+                                ALTER TABLE courses ADD CONSTRAINT courses_capacity_positive CHECK (capacity > 0);
+                            END IF;
+                        END $$;
+                        """,
+                        """
+                        DO $$
+                        BEGIN
+                            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'enrollments_status_valid') THEN
+                                ALTER TABLE enrollments ADD CONSTRAINT enrollments_status_valid CHECK (status IN ('enrolled', 'dropped', 'completed'));
+                            END IF;
+                        END $$;
+                        """,
+                        """
+                        DO $$
+                        BEGIN
+                            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'enrollments_grade_range') THEN
+                                ALTER TABLE enrollments ADD CONSTRAINT enrollments_grade_range CHECK (grade IS NULL OR (grade >= 0 AND grade <= 100));
+                            END IF;
+                        END $$;
+                        """,
+                        """
+                        DO $$
+                        BEGIN
+                            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'major_plan_courses_semester_range') THEN
+                                ALTER TABLE major_plan_courses ADD CONSTRAINT major_plan_courses_semester_range CHECK (semester BETWEEN 1 AND 12);
+                            END IF;
+                        END $$;
+                        """,
+                        """
+                        DO $$
+                        BEGIN
+                            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_role_valid') THEN
+                                ALTER TABLE users ADD CONSTRAINT users_role_valid CHECK (role IN ('admin', 'student', 'teacher'));
+                            END IF;
+                        END $$;
+                        """,
         ]
 
         with self.get_cursor(autocommit=True) as cur:

@@ -53,6 +53,29 @@ class MajorPlanService:
             WHERE major_name = %s
         """
         return db.fetch_one(sql, [major_name])
+
+    @staticmethod
+    def ensure_plan_exists(major_name: str, description: str = '') -> Optional[Dict[str, Any]]:
+        """
+        Ensure a plan exists for the given major; create it if missing.
+        Returns the plan record.
+        """
+        if not major_name:
+            return None
+
+        existing = MajorPlanService.get_plan_by_major(major_name)
+        if existing:
+            return existing
+
+        sql = """
+            INSERT INTO major_plans (major_name, description)
+            VALUES (%s, %s)
+            ON CONFLICT (major_name) DO UPDATE SET updated_at = NOW()
+            RETURNING id, major_name, description, created_at, updated_at
+        """
+        created = db.fetch_one(sql, [major_name, description])
+        logger.info(f"✅ Auto-created major plan for major: {major_name}")
+        return created
     
     @staticmethod
     def add_course_to_plan(plan_id: int, course_id: int, semester: int, is_required: bool = True) -> Dict[str, Any]:

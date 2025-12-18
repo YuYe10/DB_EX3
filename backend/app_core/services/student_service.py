@@ -31,22 +31,9 @@ class StudentService:
         # Get major plan
         from app_core.services.major_plan_service import MajorPlanService
         
-        plan = MajorPlanService.get_plan_by_major(student['major'])
+        plan = MajorPlanService.ensure_plan_exists(student['major'])
         if not plan:
-            # If no plan exists for this major, return all available courses
-            return db.fetch_all(
-                '''
-                SELECT c.*, t.name AS teacher_name,
-                       (SELECT COUNT(*) FROM enrollments WHERE course_id = c.id) AS enrolled_count
-                FROM courses c
-                LEFT JOIN teachers t ON c.teacher_id = t.id
-                WHERE c.id NOT IN (
-                    SELECT course_id FROM enrollments WHERE student_id = %s
-                )
-                ORDER BY c.id DESC
-                ''',
-                [student_id]
-            )
+            return []
         
         # Get courses from plan
         if semester is not None:
@@ -54,6 +41,10 @@ class StudentService:
         else:
             courses = MajorPlanService.get_plan_courses(plan['id'])
         
+        # If plan has no configured courses, hide the course list
+        if not courses:
+            return []
+
         # Filter out already enrolled courses
         enrolled_sql = 'SELECT course_id FROM enrollments WHERE student_id = %s'
         enrolled = db.fetch_all(enrolled_sql, [student_id])
@@ -79,7 +70,7 @@ class StudentService:
         if not student or not student.get('major'):
             return []
         
-        plan = MajorPlanService.get_plan_by_major(student['major'])
+        plan = MajorPlanService.ensure_plan_exists(student['major'])
         if not plan:
             return []
         
