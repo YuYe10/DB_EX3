@@ -97,9 +97,43 @@ class StudentService:
         """
         Enroll student in a course.
         
+        Validates that the course is available in the student's major plan.
+        
         Returns:
             New enrollment ID
+        
+        Raises:
+            ValueError: If course not in student's major plan, or plan doesn't exist
         """
+        from app_core.services.major_plan_service import MajorPlanService
+        
+        # Get student info and ensure they have a plan
+        student = StudentService.get_student_info(student_id)
+        if not student or not student.get('major'):
+            raise ValueError('Student not found or has no major assigned')
+        
+        plan = MajorPlanService.ensure_plan_exists(student['major'])
+        if not plan:
+            raise ValueError(f'No major plan exists for major: {student["major"]}')
+        
+        # Verify course is in the student's major plan
+        plan_courses = db.fetch_all(
+            'SELECT course_id FROM major_plan_courses WHERE plan_id = %s',
+            [plan['id']]
+        )
+        plan_course_ids = {pc['course_id'] for pc in plan_courses}
+        
+        if course_id not in plan_course_ids:
+            raise ValueError(f'Course {course_id} is not available in your major plan')
+        
+        # Check for duplicate enrollment
+        existing = db.fetch_one(
+            'SELECT id FROM enrollments WHERE student_id = %s AND course_id = %s',
+            [student_id, course_id]
+        )
+        if existing:
+            raise ValueError('You are already enrolled in this course')
+        
         return db.execute_returning(
             'INSERT INTO enrollments (student_id, course_id, status) VALUES (%s, %s, %s) RETURNING id',
             [student_id, course_id, 'enrolled']
