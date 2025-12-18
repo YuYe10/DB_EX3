@@ -142,6 +142,27 @@ class Database:
             );
             """,
             """
+            CREATE TABLE IF NOT EXISTS major_plans (
+                id SERIAL PRIMARY KEY,
+                major_name VARCHAR(128) NOT NULL,
+                description TEXT DEFAULT '',
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(major_name)
+            );
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS major_plan_courses (
+                id SERIAL PRIMARY KEY,
+                plan_id INT REFERENCES major_plans(id) ON DELETE CASCADE,
+                course_id INT REFERENCES courses(id) ON DELETE CASCADE,
+                semester INT NOT NULL,
+                is_required BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(plan_id, course_id, semester)
+            );
+            """,
+            """
             CREATE INDEX IF NOT EXISTS idx_enrollments_course ON enrollments(course_id);
             """,
             """

@@ -12,7 +12,7 @@ from config import Config
 from services import UserService
 from api import auth_bp, student_bp, teacher_bp, admin_bp
 from middleware import deduplicate_request, log_operation
-from logger_config import setup_logging, log_request, log_response, log_auth, log_database, log_error
+from logger import setup_logging, log_request, log_response, log_auth, log_database, log_error
 
 # 设置日志系统
 setup_logging(log_dir='logs', console_level=logging.DEBUG, file_level=logging.INFO)

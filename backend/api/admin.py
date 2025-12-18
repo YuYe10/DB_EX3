@@ -2,8 +2,9 @@
 Admin routes blueprint.
 """
 from flask import Blueprint, request, jsonify, send_file
-from services import AdminService
+from services import AdminService, MajorPlanService
 from utils import json_response, error_response, validate_fields, require_auth
+from utils.validators import validate_major_plan, validate_plan_course, validate_semester
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/api')
 
@@ -270,3 +271,113 @@ def health_check():
         return jsonify({'db': True})
     except Exception:
         return jsonify({'db': False}), 503
+
+
+# ========== Major Plans ========== #
+
+@admin_bp.route('/major-plans', methods=['GET', 'POST'])
+@require_auth(['admin'])
+def major_plans():
+    """Get all major plans or create a new one."""
+    if request.method == 'GET':
+        plans = MajorPlanService.get_all_plans()
+        return jsonify(plans)
+    
+    # POST - Create major plan
+    payload = request.get_json(force=True)
+    
+    try:
+        validate_major_plan(payload)
+    except ValueError as e:
+        return error_response(str(e))
+    
+    existing = MajorPlanService.get_plan_by_major(payload['major_name'])
+    if existing:
+        return error_response(f"Major plan for '{payload['major_name']}' already exists", status=409)
+    
+    plan = MajorPlanService.create_plan(
+        payload['major_name'],
+        payload.get('description', '')
+    )
+    
+    # json_response already returns (Response, status); avoid wrapping in another tuple
+    return json_response(plan, message='Major plan created successfully', status=201)
+
+
+@admin_bp.route('/major-plans/<int:plan_id>', methods=['GET', 'PUT', 'DELETE'])
+@require_auth(['admin'])
+def manage_major_plan(plan_id: int):
+    """Get, update, or delete a major plan."""
+    plan = MajorPlanService.get_plan_by_id(plan_id)
+    if not plan:
+        return error_response('Major plan not found', status=404)
+    
+    if request.method == 'GET':
+        # Return plan with all its courses
+        plan['courses'] = MajorPlanService.get_plan_courses(plan_id)
+        plan['semesters'] = MajorPlanService.get_all_semesters(plan_id)
+        return jsonify(plan)
+    
+    if request.method == 'DELETE':
+        MajorPlanService.delete_plan(plan_id)
+        return json_response(message='Major plan deleted successfully')
+    
+    # PUT - Update major plan
+    payload = request.get_json(force=True)
+    updated_plan = MajorPlanService.update_plan(
+        plan_id,
+        payload.get('major_name'),
+        payload.get('description')
+    )
+    return json_response(updated_plan, message='Major plan updated successfully')
+
+
+@admin_bp.route('/major-plans/<int:plan_id>/courses', methods=['GET', 'POST'])
+@require_auth(['admin'])
+def manage_plan_courses(plan_id: int):
+    """Get all courses in a plan or add a new course to the plan."""
+    plan = MajorPlanService.get_plan_by_id(plan_id)
+    if not plan:
+        return error_response('Major plan not found', status=404)
+    
+    if request.method == 'GET':
+        semester = request.args.get('semester', type=int)
+        if semester:
+            courses = MajorPlanService.get_courses_by_semester(plan_id, semester)
+        else:
+            courses = MajorPlanService.get_plan_courses(plan_id)
+        return jsonify(courses)
+    
+    # POST - Add course to plan
+    payload = request.get_json(force=True)
+    
+    try:
+        validate_plan_course(payload)
+    except ValueError as e:
+        return error_response(str(e))
+    
+    try:
+        course = MajorPlanService.add_course_to_plan(
+            plan_id,
+            payload['course_id'],
+            payload['semester'],
+            payload.get('is_required', True)
+        )
+        # json_response already returns (Response, status); avoid wrapping in another tuple
+        return json_response(course, message='Course added to plan successfully', status=201)
+    except Exception as e:
+        if 'duplicate key' in str(e).lower():
+            return error_response('This course is already in the plan for this semester', status=409)
+        return error_response(str(e))
+
+
+@admin_bp.route('/major-plans/courses/<int:course_id>', methods=['DELETE'])
+@require_auth(['admin'])
+def remove_plan_course(course_id: int):
+    """Remove a course from a major plan."""
+    try:
+        MajorPlanService.remove_course_from_plan(course_id)
+        return json_response(message='Course removed from plan successfully')
+    except Exception as e:
+        return error_response(str(e), status=400)
+

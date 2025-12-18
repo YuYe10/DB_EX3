@@ -136,7 +136,7 @@ class ColoredFormatter(logging.Formatter):
         for method in self.METHOD_COLORS.keys():
             if f' {method} ' in message:
                 method_color = self.METHOD_COLORS[method]
-                message = message.replace(f' {method} ', f'{method_COLOR}{method}{Colors.RESET} ')
+                message = message.replace(f' {method} ', f'{method_color}{method}{Colors.RESET} ')
                 break
         
         # Format the log line

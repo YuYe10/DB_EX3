@@ -350,6 +350,125 @@
         </div>
       </div>
     </section>
+
+    <!-- Major Professional Development Plans Management Section -->
+    <section class="grid">
+      <article class="card" style="--accent: #10b981;">
+        <header class="card-header">
+          <h2>🎯 新增专业培养计划</h2>
+          <p class="card-desc">为不同专业创建课程修习计划</p>
+        </header>
+        <form @submit.prevent="createMajorPlan" class="form-grid">
+          <label class="form-group">
+            <span class="label-text">专业名称</span>
+            <input v-model="majorPlanForm.major_name" required placeholder="例: 计算机科学" />
+          </label>
+          <label class="form-group">
+            <span class="label-text">描述</span>
+            <input v-model="majorPlanForm.description" placeholder="例: 计算机科学专业培养计划" />
+          </label>
+          <button type="submit" class="btn-primary">+ 创建培养计划</button>
+        </form>
+        <div class="list" v-if="majorPlans.length">
+          <div class="list-header">
+            <h3 class="list-title">📋 培养计划列表 ({{ filteredMajorPlans.length }}/{{ majorPlans.length }})</h3>
+            <button class="btn-collapse" @click="majorPlansCollapsed = !majorPlansCollapsed">
+              {{ majorPlansCollapsed ? '展开 ▼' : '折叠 ▲' }}
+            </button>
+          </div>
+          <div class="search-box" v-show="!majorPlansCollapsed">
+            <input 
+              v-model="majorPlanSearch" 
+              placeholder="🔍 搜索专业名称..." 
+              class="search-input"
+            />
+          </div>
+          <transition name="collapse">
+            <div v-show="!majorPlansCollapsed">
+              <div class="item-card" v-for="plan in filteredMajorPlans" :key="plan.id">
+                <div class="item-content">
+                  <div class="item-badge">📚</div>
+                  <div class="item-details">
+                    <div class="item-name">{{ plan.major_name }}</div>
+                    <div class="item-meta">{{ plan.description || '无描述' }} · {{ plan.course_count || 0 }}门课程</div>
+                  </div>
+                </div>
+                <div class="item-actions">
+                  <button class="btn-secondary-sm" @click="editingPlanId = plan.id">编辑</button>
+                  <button class="btn-danger-sm" @click="deleteMajorPlan(plan.id)">删除</button>
+                </div>
+              </div>
+              <div class="empty-state" v-if="filteredMajorPlans.length === 0 && majorPlanSearch">
+                <p>未找到匹配的专业培养计划</p>
+              </div>
+            </div>
+          </transition>
+        </div>
+        <div class="empty-state" v-else>
+          <p>暂无专业培养计划</p>
+        </div>
+      </article>
+
+      <article class="card" style="--accent: #f59e0b;">
+        <header class="card-header">
+          <h2>📖 为培养计划添加课程</h2>
+          <p class="card-desc">指定课程在计划中的学期与是否必修</p>
+        </header>
+        <form @submit.prevent="addCourseToPlan" class="form-grid" v-if="majorPlans.length">
+          <label class="form-group">
+            <span class="label-text">选择培养计划</span>
+            <select v-model.number="planCourseForm.plan_id" required>
+              <option :value="''">请选择培养计划</option>
+              <option v-for="plan in majorPlans" :key="plan.id" :value="plan.id">
+                {{ plan.major_name }}
+              </option>
+            </select>
+          </label>
+          <label class="form-group">
+            <span class="label-text">选择课程</span>
+            <select v-model.number="planCourseForm.course_id" required>
+              <option :value="''">请选择课程</option>
+              <option v-for="c in courses" :key="c.id" :value="c.id">
+                {{ c.name }}
+              </option>
+            </select>
+          </label>
+          <label class="form-group">
+            <span class="label-text">学期</span>
+            <select v-model.number="planCourseForm.semester" required>
+              <option :value="''">请选择学期</option>
+              <option v-for="s in semesterOptions" :key="s" :value="s">
+                第{{ s }}学期
+              </option>
+            </select>
+          </label>
+          <label class="form-group checkbox-group">
+            <input v-model="planCourseForm.is_required" type="checkbox" />
+            <span class="label-text">是否为必修课</span>
+          </label>
+          <button type="submit" class="btn-primary">+ 添加课程到计划</button>
+        </form>
+        <div v-else class="empty-state">
+          <p>请先创建培养计划</p>
+        </div>
+
+        <div class="plan-courses-view" v-if="selectedPlanCourses.length">
+          <h4>📚 当前计划的课程</h4>
+          <div class="semester-courses">
+            <div v-for="semester in uniqueSemesters" :key="semester" class="semester-section">
+              <div class="semester-title">第{{ semester }}学期</div>
+              <div class="course-item" v-for="pc in selectedPlanCourses.filter(c => c.semester === semester)" :key="pc.id">
+                <div class="course-info">
+                  <span class="course-name">{{ pc.course_name }}</span>
+                  <span class="course-type">{{ pc.is_required ? '必修' : '选修' }}</span>
+                </div>
+                <button class="btn-danger-sm" @click="removeCoursePlan(pc.id)">移除</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </article>
+    </section>
   </div>
 </template>
 
@@ -376,24 +495,35 @@ const importLoading = ref(false)
 const exportCourseId = ref('')
 const exportLoading = ref(false)
 const exportError = ref('')
+const majorPlans = ref([])
+const planCourses = ref([])
+const selectedPlanId = ref('')
+const editingPlanId = ref('')
 
 const studentForm = reactive({ student_no: '', name: '', major: '' })
 const teacherForm = reactive({ teacher_no: '', name: '', department: '' })
 const courseForm = reactive({ course_code: '', name: '', credit: 0, capacity: 50, teacher_id: null })
 const enrollForm = reactive({ student_id: '', course_id: '' })
 const gradeInput = reactive({})
+const majorPlanForm = reactive({ major_name: '', description: '' })
+const planCourseForm = reactive({ plan_id: '', course_id: '', semester: '', is_required: true })
 
 // 折叠状态
 const studentsCollapsed = ref(false)
 const teachersCollapsed = ref(false)
 const coursesCollapsed = ref(false)
 const enrollmentsCollapsed = ref(false)
+const majorPlansCollapsed = ref(false)
 
 // 搜索/筛选条件
 const studentSearch = ref('')
 const teacherSearch = ref('')
 const courseSearch = ref('')
 const enrollmentSearch = ref('')
+const majorPlanSearch = ref('')
+
+// 其他常量
+const semesterOptions = [1, 2, 3, 4, 5, 6, 7, 8]
 
 const healthText = computed(() => (health.db ? '连接正常' : '等待连接'))
 
@@ -446,6 +576,25 @@ const filteredEnrollments = computed(() => {
   )
 })
 
+const filteredMajorPlans = computed(() => {
+  if (!majorPlanSearch.value) return majorPlans.value
+  const search = majorPlanSearch.value.toLowerCase()
+  return majorPlans.value.filter(p => 
+    p.major_name.toLowerCase().includes(search) ||
+    (p.description && p.description.toLowerCase().includes(search))
+  )
+})
+
+const selectedPlanCourses = computed(() => {
+  if (!selectedPlanId.value) return []
+  return planCourses.value.filter(pc => pc.plan_id === selectedPlanId.value)
+})
+
+const uniqueSemesters = computed(() => {
+  const semesters = new Set(selectedPlanCourses.value.map(c => c.semester))
+  return Array.from(semesters).sort((a, b) => a - b)
+})
+
 function handleLogout() {
   emit('logout')
 }
@@ -471,12 +620,13 @@ async function loadHealth() {
 }
 
 async function loadAll() {
-  const [s, t, c, e, st] = await Promise.all([
+  const [s, t, c, e, st, mp] = await Promise.all([
     api('/students'),
     api('/teachers'),
     api('/courses'),
     api('/enrollments'),
     api('/statistics/overview'),
+    api('/major-plans'),
   ])
   students.value = s
   teachers.value = t
@@ -484,6 +634,7 @@ async function loadAll() {
   enrollments.value = e
   stats.counts = st.counts
   stats.course_avg = st.course_avg
+  majorPlans.value = mp || []
 }
 
 async function createStudent() {
@@ -622,6 +773,74 @@ async function exportGrades() {
     exportError.value = err.message
   } finally {
     exportLoading.value = false
+  }
+}
+
+// Major Plan Functions
+async function createMajorPlan() {
+  try {
+    await api('/major-plans', { method: 'POST', body: JSON.stringify(majorPlanForm) })
+    majorPlanForm.major_name = ''
+    majorPlanForm.description = ''
+    await loadAll()
+  } catch (err) {
+    alert(`创建培养计划失败: ${err.message}`)
+  }
+}
+
+async function deleteMajorPlan(id) {
+  const plan = majorPlans.value.find(p => p.id === id)
+  if (!confirm(`确定要删除培养计划 "${plan?.major_name}" 吗？`)) return
+  try {
+    await api(`/major-plans/${id}`, { method: 'DELETE' })
+    await loadAll()
+  } catch (err) {
+    alert(`删除失败: ${err.message}`)
+  }
+}
+
+async function addCourseToPlan() {
+  try {
+    await api(`/major-plans/${planCourseForm.plan_id}/courses`, {
+      method: 'POST',
+      body: JSON.stringify({
+        course_id: planCourseForm.course_id,
+        semester: planCourseForm.semester,
+        is_required: planCourseForm.is_required,
+      }),
+    })
+    selectedPlanId.value = planCourseForm.plan_id
+    planCourseForm.course_id = ''
+    planCourseForm.semester = ''
+    planCourseForm.is_required = true
+    await loadMajorPlanCourses()
+    await loadAll()
+  } catch (err) {
+    alert(`添加课程失败: ${err.message}`)
+  }
+}
+
+async function removeCoursePlan(courseId) {
+  try {
+    await api(`/major-plans/courses/${courseId}`, { method: 'DELETE' })
+    await loadMajorPlanCourses()
+    await loadAll()
+  } catch (err) {
+    alert(`移除课程失败: ${err.message}`)
+  }
+}
+
+async function loadMajorPlanCourses() {
+  if (!selectedPlanId.value) {
+    planCourses.value = []
+    return
+  }
+  try {
+    const data = await api(`/major-plans/${selectedPlanId.value}/courses`)
+    planCourses.value = data
+  } catch (err) {
+    console.error('加载计划课程失败:', err)
+    planCourses.value = []
   }
 }
 
@@ -1387,6 +1606,121 @@ input:focus, select:focus {
   .stats-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* Major Plan Styles */
+.plan-courses-view {
+  margin-top: 20px;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 10px;
+}
+
+.plan-courses-view h4 {
+  margin: 0 0 16px 0;
+  font-size: 14px;
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.semester-courses {
+  display: grid;
+  gap: 16px;
+}
+
+.semester-section {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.semester-title {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 12px 16px;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.course-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e2e8f0;
+  transition: background 0.2s ease;
+}
+
+.course-item:last-child {
+  border-bottom: none;
+}
+
+.course-item:hover {
+  background: #f1f5f9;
+}
+
+.course-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.course-name {
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.course-type {
+  display: inline-block;
+  background: #dbeafe;
+  color: #1e40af;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.course-item .course-type {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.item-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-secondary-sm {
+  padding: 6px 12px;
+  background: #e0e7ff;
+  color: #4f46e5;
+  border: 1px solid #c7d2fe;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-weight: 500;
+}
+
+.btn-secondary-sm:hover {
+  background: #c7d2fe;
+  color: #4338ca;
+  transform: translateY(-1px);
+}
+
+.checkbox-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.checkbox-group input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
 }
 
 @media (max-width: 480px) {

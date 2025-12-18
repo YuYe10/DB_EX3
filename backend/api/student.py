@@ -4,15 +4,50 @@ Student routes blueprint.
 from flask import Blueprint, request, session, jsonify
 from services import StudentService
 from utils import json_response, error_response, validate_fields, require_auth
+from utils.validators import validate_semester
 
 student_bp = Blueprint('student', __name__, url_prefix='/api/student')
+
+
+@student_bp.route('/info', methods=['GET'])
+@require_auth(['student'])
+def get_student_info():
+    """Get current student's information."""
+    student_id = session['ref_id']
+    student = StudentService.get_student_info(student_id)
+    
+    if not student:
+        return error_response('Student not found', status=404)
+    
+    return jsonify(student)
+
+
+@student_bp.route('/semesters', methods=['GET'])
+@require_auth(['student'])
+def get_semesters():
+    """Get all available semesters for student's major plan."""
+    student_id = session['ref_id']
+    semesters = StudentService.get_available_semesters(student_id)
+    return jsonify(semesters)
 
 
 @student_bp.route('/courses/available', methods=['GET'])
 @require_auth(['student'])
 def get_available_courses():
-    """Get all courses available for enrollment."""
-    courses = StudentService.get_available_courses(session['ref_id'])
+    """
+    Get all courses available for enrollment based on major plan.
+    Optional query parameter: semester (specific semester) or all if not provided.
+    """
+    student_id = session['ref_id']
+    semester = request.args.get('semester', type=int)
+    
+    try:
+        if semester is not None:
+            validate_semester(semester)
+    except ValueError as e:
+        return error_response(str(e))
+    
+    courses = StudentService.get_available_courses(student_id, semester)
     # Frontend expects a plain array, not a wrapped payload
     return jsonify(courses)
 

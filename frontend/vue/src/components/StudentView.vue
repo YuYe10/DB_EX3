@@ -22,6 +22,12 @@
             placeholder="搜索课程名称或教师..."
             class="search-input"
           />
+          <select v-model.number="selectedSemester" class="filter-select">
+            <option :value="null">全部学期</option>
+            <option v-for="s in availableSemesters" :key="s" :value="s">
+              第{{ s }}学期
+            </option>
+          </select>
           <select v-model="filterCredit" class="filter-select">
             <option value="">所有学分</option>
             <option value="1">1学分</option>
@@ -125,6 +131,8 @@ const showChangePassword = ref(false)
 const errorMsg = ref('')
 const searchKeyword = ref('')
 const filterCredit = ref('')
+const selectedSemester = ref(null)
+const availableSemesters = ref([])
 
 const passwordForm = reactive({
   old_password: '',
@@ -134,6 +142,9 @@ const passwordForm = reactive({
 // 计算筛选后的课程
 const filteredCourses = computed(() => {
   return availableCourses.value.filter(c => {
+    // 学期过滤
+    if (selectedSemester.value !== null && c.semester !== selectedSemester.value) return false
+    
     // 搜索关键词过滤
     if (searchKeyword.value) {
       const keyword = searchKeyword.value.toLowerCase()
@@ -168,12 +179,14 @@ async function api(path, options = {}) {
 
 async function loadData() {
   try {
-    const [available, enrolled] = await Promise.all([
+    const [available, enrolled, semesters] = await Promise.all([
       api('/student/courses/available'),
-      api('/student/enrollments')
+      api('/student/enrollments'),
+      api('/student/semesters')
     ])
     availableCourses.value = available
     myEnrollments.value = enrolled
+    availableSemesters.value = semesters || []
   } catch (error) {
     console.error('加载数据失败:', error)
   }
