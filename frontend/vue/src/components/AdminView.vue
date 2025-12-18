@@ -1012,28 +1012,30 @@ watch(
 
 /* ===== STAT PANEL ===== */
 .stat-panel {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 16px;
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
   flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .stat-card {
-  padding: 20px;
-  border-radius: 16px;
+  padding: 14px 16px;
+  min-width: 110px;
+  border-radius: 14px;
   background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-  border: 2px solid #7dd3fc;
+  border: 1px solid #7dd3fc;
   text-align: center;
-  transition: all 0.3s ease;
+  transition: all 0.25s ease;
 }
 
 .stat-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 12px 24px rgba(56, 189, 248, 0.25);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 18px rgba(56, 189, 248, 0.25);
 }
 
 .stat-value {
-  font-size: 32px;
+  font-size: 26px;
   font-weight: 800;
   background: linear-gradient(135deg, #0284c7 0%, #06b6d4 100%);
   -webkit-background-clip: text;
@@ -1042,12 +1044,12 @@ watch(
 }
 
 .stat-label {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   color: #0c4a6e;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
-  margin-top: 4px;
+  letter-spacing: 0.08em;
+  margin-top: 2px;
 }
 
 /* ===== GRID LAYOUT ===== */
@@ -1614,7 +1616,7 @@ input:focus, select:focus {
   }
 
   .stat-panel {
-    grid-template-columns: repeat(2, 1fr);
+    justify-content: flex-start;
   }
 
   .card {

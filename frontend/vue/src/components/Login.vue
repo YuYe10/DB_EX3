@@ -37,7 +37,7 @@
           {{ loading ? '登录中...' : '登 录' }}
         </button>
       </form>
-      
+
       <div class="login-hints">
         <div class="hint-item">
           <strong>学生:</strong> 账号=学号, 密码=s+学号
@@ -49,6 +49,7 @@
           <strong>管理员:</strong> 账号=admin, 密码=admin@123
         </div>
       </div>
+      
     </div>
   </div>
 </template>
