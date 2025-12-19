@@ -256,7 +256,9 @@ def drop_course(enrollment_id: int):
 @require_auth(['admin'])
 def statistics_overview():
     """Get system statistics."""
-    stats = AdminService.get_statistics()
+    course_code = request.args.get('course_code')
+    course_name = request.args.get('course_name')
+    stats = AdminService.get_statistics(course_code=course_code, course_name=course_name)
     return jsonify(stats)
 
 

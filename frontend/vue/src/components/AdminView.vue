@@ -434,8 +434,24 @@
     <section class="card stats-card" v-if="stats.course_avg?.length">
       <header class="card-header">
         <h2>📊 课程平均成绩统计</h2>
-        <p class="card-desc">实时显示各课程的平均成绩</p>
+        <p class="card-desc">实时显示各课程的平均成绩、及格率、优秀率，可按课程号/课程名查询</p>
       </header>
+      <div class="stat-filters">
+        <input
+          v-model="courseStatFilters.code"
+          placeholder="按课程号查询..."
+          class="search-input compact"
+        />
+        <input
+          v-model="courseStatFilters.name"
+          placeholder="按课程名查询..."
+          class="search-input compact"
+        />
+        <div class="filter-actions">
+          <button class="btn-secondary-sm" type="button" @click="loadStatistics">查询</button>
+          <button class="btn-cancel-sm" type="button" @click="resetStatFilters">重置</button>
+        </div>
+      </div>
       <div class="stats-grid">
         <div class="stat-item" v-for="c in stats.course_avg" :key="c.id">
           <div class="stat-item-header">
@@ -443,6 +459,11 @@
             <span class="stat-name">{{ c.name }}</span>
           </div>
           <div class="stat-value-large">{{ c.avg_grade ?? '无' }}</div>
+          <div class="stat-meta">
+            <span class="stat-chip">📈 及格率 {{ formatRate(c.pass_rate) }}</span>
+            <span class="stat-chip">🌟 优秀率 {{ formatRate(c.excellent_rate) }}</span>
+            <span class="stat-chip">👥 选课人数 {{ c.enrolled_count ?? 0 }}</span>
+          </div>
         </div>
       </div>
     </section>
@@ -603,6 +624,7 @@ const enrollForm = reactive({ student_id: '', course_id: '' })
 const gradeInput = reactive({})
 const majorPlanForm = reactive({ major_name: '', description: '' })
 const planCourseForm = reactive({ plan_id: '', course_id: '', semester: '', is_required: true })
+const courseStatFilters = reactive({ code: '', name: '' })
 
 // 折叠状态
 const studentsCollapsed = ref(false)
@@ -726,22 +748,43 @@ async function loadHealth() {
 }
 
 async function loadAll() {
-  const [s, t, c, e, st, mp] = await Promise.all([
+  const [s, t, c, e, mp] = await Promise.all([
     api('/students'),
     api('/teachers'),
     api('/courses'),
     api('/enrollments'),
-    api('/statistics/overview'),
     api('/major-plans'),
   ])
   students.value = s
   teachers.value = t
   courses.value = c
   enrollments.value = e
-  stats.counts = st.counts
-  stats.course_avg = st.course_avg
   majorPlans.value = mp || []
+  await loadStatistics()
   await loadPlanCourseCounts()
+}
+
+async function loadStatistics() {
+  const params = new URLSearchParams()
+  if (courseStatFilters.code) params.append('course_code', courseStatFilters.code)
+  if (courseStatFilters.name) params.append('course_name', courseStatFilters.name)
+
+  const st = await api(`/statistics/overview${params.toString() ? `?${params.toString()}` : ''}`)
+  stats.counts = st.counts
+  stats.course_avg = st.course_avg || []
+}
+
+function resetStatFilters() {
+  courseStatFilters.code = ''
+  courseStatFilters.name = ''
+  loadStatistics()
+}
+
+function formatRate(val) {
+  if (val === null || val === undefined) return '—'
+  const num = Number(val)
+  if (Number.isNaN(num)) return '—'
+  return `${num.toFixed(2)}%`
 }
 
 async function createStudent() {
@@ -1858,6 +1901,44 @@ input:focus, select:focus {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+}
+
+.stat-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.search-input.compact {
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+.filter-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.stat-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.stat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #e0f2fe;
+  color: #0c4a6e;
+  font-weight: 600;
+  font-size: 12px;
+  border: 1px solid #bae6fd;
 }
 
 /* ===== 折叠与搜索功能样式 ===== */

@@ -31,6 +31,14 @@ def get_course_students(course_id: int):
     return jsonify(students)
 
 
+@teacher_bp.route('/courses/stats', methods=['GET'])
+@require_auth(['teacher'])
+def get_course_stats():
+    """Get stats (avg/pass/excellent) for courses taught by the current teacher."""
+    stats = TeacherService.get_course_stats(session['ref_id'])
+    return jsonify(stats)
+
+
 @teacher_bp.route('/enrollments/<int:enrollment_id>/grade', methods=['PUT'])
 @require_auth(['teacher'])
 def set_grade(enrollment_id: int):

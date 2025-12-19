@@ -117,7 +117,9 @@ class Database:
                 name VARCHAR(128) NOT NULL,
                 credit NUMERIC(3,1) DEFAULT 0,
                 capacity INT DEFAULT 50,
-                teacher_id INT REFERENCES teachers(id) ON DELETE SET NULL
+                teacher_id INT REFERENCES teachers(id) ON DELETE SET NULL,
+                pass_rate NUMERIC(5,2),
+                excellent_rate NUMERIC(5,2)
             );
             """,
             """
@@ -201,6 +203,22 @@ class Database:
                         BEGIN
                             IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'courses_capacity_positive') THEN
                                 ALTER TABLE courses ADD CONSTRAINT courses_capacity_positive CHECK (capacity > 0);
+                            END IF;
+                        END $$;
+                        """,
+                        """
+                        DO $$
+                        BEGIN
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='courses' AND column_name='pass_rate') THEN
+                                ALTER TABLE courses ADD COLUMN pass_rate NUMERIC(5,2);
+                            END IF;
+                        END $$;
+                        """,
+                        """
+                        DO $$
+                        BEGIN
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='courses' AND column_name='excellent_rate') THEN
+                                ALTER TABLE courses ADD COLUMN excellent_rate NUMERIC(5,2);
                             END IF;
                         END $$;
                         """,

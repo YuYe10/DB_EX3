@@ -58,6 +58,27 @@
             </p>
             <p>课程创建 {{ importSummary.course_created }}，更新 {{ importSummary.course_updated }}</p>
           </div>
+
+          <section class="card stats-card" v-if="courseStats.length">
+            <header class="card-header">
+              <h3>📊 我的课程成绩概览</h3>
+              <p class="card-desc">展示授课课程的平均分、及格率、优秀率</p>
+            </header>
+            <div class="stats-grid">
+              <div class="stat-item" v-for="c in courseStats" :key="c.id">
+                <div class="stat-item-header">
+                  <span class="stat-code">{{ c.course_code }}</span>
+                  <span class="stat-name">{{ c.name }}</span>
+                </div>
+                <div class="stat-value-large">{{ c.avg_grade ?? '无' }}</div>
+                <div class="stat-meta">
+                  <span class="stat-chip">📈 及格率 {{ formatRate(c.pass_rate) }}</span>
+                  <span class="stat-chip">🌟 优秀率 {{ formatRate(c.excellent_rate) }}</span>
+                  <span class="stat-chip">👥 选课人数 {{ c.enrolled_count ?? 0 }}</span>
+                </div>
+              </div>
+            </div>
+          </section>
           
           <div class="student-list">
             <div v-if="students.length === 0" class="empty-small">暂无学生选课</div>
@@ -237,6 +258,7 @@ const exportError = ref('')
 const importLoading = ref(false)
 const importError = ref('')
 const importSummary = ref(null)
+const courseStats = ref([])
 const expandedGradeEditors = ref({})
 const gradeEditForm = ref({})
 
@@ -267,8 +289,17 @@ async function loadCourses() {
     if (myCourses.value.length > 0 && !selectedCourseId.value) {
       selectCourse(myCourses.value[0].id)
     }
+    await loadCourseStats()
   } catch (error) {
     console.error('加载课程失败:', error)
+  }
+}
+
+async function loadCourseStats() {
+  try {
+    courseStats.value = await api('/teacher/courses/stats')
+  } catch (error) {
+    console.error('加载课程统计失败:', error)
   }
 }
 
@@ -333,6 +364,13 @@ function calcPreviewGrade(enrollmentId) {
   
   const final = Number(os) * Number(ow) + Number(fs) * Number(fw)
   return final.toFixed(1)
+}
+
+function formatRate(val) {
+  if (val === null || val === undefined) return '—'
+  const num = Number(val)
+  if (Number.isNaN(num)) return '—'
+  return `${num.toFixed(2)}%`
 }
 
 async function updateGrades(enrollmentId) {
@@ -855,6 +893,78 @@ tbody tr:hover {
   border: none;
   background: linear-gradient(135deg, #8b5cf6, #7c3aed);
   color: white;
+}
+
+/* 课程统计样式 */
+.stats-card {
+  margin-top: 20px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-top: 14px;
+}
+
+.stat-item {
+  padding: 18px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border: 2px solid #7dd3fc;
+  transition: all 0.3s ease;
+}
+
+.stat-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.stat-code {
+  font-weight: 800;
+  color: #0284c7;
+  font-size: 13px;
+  text-transform: uppercase;
+  background: white;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.stat-name {
+  color: #0c4a6e;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.stat-value-large {
+  font-size: 32px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #0284c7 0%, #06b6d4 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.stat-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.stat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  background: #e0f2fe;
+  color: #0c4a6e;
+  font-weight: 600;
+  font-size: 12px;
+  border: 1px solid #bae6fd;
 }
 
 /* 成绩编辑器样式 */

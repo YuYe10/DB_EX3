@@ -101,6 +101,34 @@ class TeacherService:
         # Use AdminService for the actual update (same logic applies)
         return AdminService.update_student_grades(enrollment_id, payload)
 
+    @staticmethod
+    def get_course_stats(teacher_id: int) -> List[Dict[str, Any]]:
+        """Get per-course stats (avg, pass, excellent) for courses taught by the teacher."""
+        return db.fetch_all(
+            '''
+            SELECT 
+                c.id,
+                c.name,
+                c.course_code,
+                COUNT(e.id) AS enrolled_count,
+                ROUND(AVG(COALESCE(e.final_grade, e.grade))::numeric, 2) AS avg_grade,
+                ROUND(
+                    (SUM(CASE WHEN COALESCE(e.final_grade, e.grade) >= 60 THEN 1 ELSE 0 END)::numeric
+                        / NULLIF(COUNT(e.id), 0)) * 100, 2
+                ) AS pass_rate,
+                ROUND(
+                    (SUM(CASE WHEN COALESCE(e.final_grade, e.grade) >= 90 THEN 1 ELSE 0 END)::numeric
+                        / NULLIF(COUNT(e.id), 0)) * 100, 2
+                ) AS excellent_rate
+            FROM courses c
+            LEFT JOIN enrollments e ON e.course_id = c.id
+            WHERE c.teacher_id = %s
+            GROUP BY c.id, c.name, c.course_code
+            ORDER BY c.id DESC
+            ''',
+            [teacher_id]
+        )
+
     # ===== Export ===== #
     @staticmethod
     def export_course_grades(teacher_id: int, course_id: int) -> Tuple[Any, Any]:

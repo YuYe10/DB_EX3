@@ -172,6 +172,26 @@ class AdminService:
         if not course:
             return None, None
 
+        # Aggregate stats for the course
+        course_stats = db.fetch_one(
+            '''
+            SELECT 
+                COUNT(e.id) AS enrolled_count,
+                ROUND(AVG(COALESCE(e.final_grade, e.grade))::numeric, 2) AS avg_grade,
+                ROUND(
+                    (SUM(CASE WHEN COALESCE(e.final_grade, e.grade) >= 60 THEN 1 ELSE 0 END)::numeric
+                        / NULLIF(COUNT(e.id), 0)) * 100, 2
+                ) AS pass_rate,
+                ROUND(
+                    (SUM(CASE WHEN COALESCE(e.final_grade, e.grade) >= 90 THEN 1 ELSE 0 END)::numeric
+                        / NULLIF(COUNT(e.id), 0)) * 100, 2
+                ) AS excellent_rate
+            FROM enrollments e
+            WHERE e.course_id = %s
+            ''',
+            [course_id]
+        ) or {}
+
         enrollments = db.fetch_all(
             '''
             SELECT 
@@ -197,7 +217,11 @@ class AdminService:
                 '学分': course.get('credit'),
                 '容量': course.get('capacity'),
                 '授课教师': course.get('teacher_name'),
-                '教师工号': course.get('teacher_no')
+                '教师工号': course.get('teacher_no'),
+                '选课人数': course_stats.get('enrolled_count', 0),
+                '平均成绩': course_stats.get('avg_grade'),
+                '及格率(%)': course_stats.get('pass_rate'),
+                '优秀率(%)': course_stats.get('excellent_rate'),
             }])
             course_df.to_excel(writer, sheet_name='课程信息', index=False)
 
@@ -505,8 +529,44 @@ class AdminService:
     # ========== Statistics ========== #
     
     @staticmethod
-    def get_statistics() -> Dict[str, Any]:
-        """Get system statistics."""
+    @staticmethod
+    def _fetch_course_stats(course_code: Optional[str] = None, course_name: Optional[str] = None):
+        """Internal helper to compute per-course statistics with optional filters."""
+        code_pattern = f"%{course_code}%" if course_code else None
+        name_pattern = f"%{course_name}%" if course_name else None
+
+        return db.fetch_all(
+            '''
+            SELECT 
+                c.id, 
+                c.name, 
+                c.course_code, 
+                COUNT(e.id) AS enrolled_count,
+                ROUND(AVG(COALESCE(e.final_grade, e.grade))::numeric, 2) AS avg_grade,
+                ROUND(
+                    (SUM(CASE WHEN COALESCE(e.final_grade, e.grade) >= 60 THEN 1 ELSE 0 END)::numeric
+                        / NULLIF(COUNT(e.id), 0)) * 100, 2
+                ) AS pass_rate,
+                ROUND(
+                    (SUM(CASE WHEN COALESCE(e.final_grade, e.grade) >= 90 THEN 1 ELSE 0 END)::numeric
+                        / NULLIF(COUNT(e.id), 0)) * 100, 2
+                ) AS excellent_rate
+            FROM courses c
+            LEFT JOIN enrollments e ON e.course_id = c.id
+            WHERE (%s IS NULL OR c.course_code ILIKE %s)
+              AND (%s IS NULL OR c.name ILIKE %s)
+            GROUP BY c.id, c.name, c.course_code
+            ORDER BY c.id
+            ''',
+            [code_pattern, code_pattern, name_pattern, name_pattern]
+        )
+
+    @staticmethod
+    def get_statistics(course_code: Optional[str] = None, course_name: Optional[str] = None) -> Dict[str, Any]:
+        """Get system statistics with optional course filters.
+
+        Also persists pass_rate and excellent_rate back to courses table.
+        """
         counts = db.fetch_one(
             '''
             SELECT
@@ -516,20 +576,20 @@ class AdminService:
                 (SELECT COUNT(*) FROM enrollments) AS enrollments
             '''
         )
-        
-        # Use final_grade when available; fall back to legacy grade
-        course_avg = db.fetch_all(
-            '''
-            SELECT 
-                c.id, 
-                c.name, 
-                c.course_code, 
-                ROUND(AVG(COALESCE(e.final_grade, e.grade))::numeric, 2) AS avg_grade
-            FROM courses c
-            LEFT JOIN enrollments e ON e.course_id = c.id
-            GROUP BY c.id, c.name, c.course_code
-            ORDER BY c.id
-            '''
+
+        # Compute full stats (without filters) and persist rates to courses table
+        full_course_stats = AdminService._fetch_course_stats()
+        for c in full_course_stats:
+            db.execute(
+                'UPDATE courses SET pass_rate=%s, excellent_rate=%s WHERE id=%s',
+                [c.get('pass_rate'), c.get('excellent_rate'), c['id']]
+            )
+
+        # Apply filters for the response payload (if provided)
+        course_stats = (
+            full_course_stats
+            if not course_code and not course_name
+            else AdminService._fetch_course_stats(course_code, course_name)
         )
         
-        return {'counts': counts, 'course_avg': course_avg}
+        return {'counts': counts, 'course_avg': course_stats}
