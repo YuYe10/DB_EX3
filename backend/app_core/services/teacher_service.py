@@ -100,6 +100,27 @@ class TeacherService:
         
         # Use AdminService for the actual update (same logic applies)
         return AdminService.update_student_grades(enrollment_id, payload)
+    
+    @staticmethod
+    def update_course_weights(teacher_id: int, course_id: int, ordinary_weight: float, final_weight: float) -> bool:
+        """Update course grade weights (only if teacher teaches the course).
+        
+        Args:
+            teacher_id: The teacher ID
+            course_id: The course ID to update
+            ordinary_weight: 平时成绩占比 (0-1)
+            final_weight: 期末成绩占比 (0-1)
+        
+        Returns:
+            bool: True if update successful, False if access denied
+        """
+        # Verify teacher teaches this course
+        course = db.fetch_one("SELECT * FROM courses WHERE id=%s", [course_id])
+        if not course or course['teacher_id'] != teacher_id:
+            return False
+        
+        # Use AdminService for the actual update
+        return AdminService.update_course_weights(course_id, ordinary_weight, final_weight)
 
     @staticmethod
     def get_course_stats(teacher_id: int) -> List[Dict[str, Any]]:

@@ -198,14 +198,88 @@
           <transition name="collapse">
             <div v-show="!coursesCollapsed">
               <div class="item-card" v-for="c in filteredCourses" :key="c.id">
-                <div class="item-content">
-                  <div class="item-badge" style="background: #fce7f3; color: #be185d;">{{ c.course_code }}</div>
-                  <div class="item-details">
-                    <div class="item-name">{{ c.name }}</div>
-                    <div class="item-meta">{{ c.teacher_name || '暂无教师' }} · {{ c.credit }}学分</div>
+                <div class="item-card-header">
+                  <div class="item-content">
+                    <div class="item-badge" style="background: #fce7f3; color: #be185d;">{{ c.course_code }}</div>
+                    <div class="item-details">
+                      <div class="item-name">{{ c.name }}</div>
+                      <div class="item-meta">{{ c.teacher_name || '暂无教师' }} · {{ c.credit }}学分</div>
+                      <div class="item-meta-weights">成绩占比：平时 {{ (Number(c.ordinary_weight ?? 0.5) * 100).toFixed(0) }}% / 期末 {{ (Number(c.final_weight ?? 0.5) * 100).toFixed(0) }}%</div>
+                    </div>
+                  </div>
+                  <div class="item-actions">
+                    <button class="btn-secondary-sm" @click="toggleCourseWeightEditor(c)">⚙️ {{ currentEditingCourse?.id === c.id ? '收起' : '设置占比' }}</button>
+                    <button class="btn-danger-sm" @click="deleteCourse(c.id)">删除</button>
                   </div>
                 </div>
-                <button class="btn-danger-sm" @click="deleteCourse(c.id)">删除</button>
+                
+                <!-- 内联权重编辑面板 -->
+                <transition name="slide-down">
+                  <div v-if="currentEditingCourse?.id === c.id" class="inline-weight-editor">
+                    <div class="weight-editor-header">
+                      <h4>设置课程成绩占比</h4>
+                    </div>
+                    <div class="weight-editor-body">
+                      <div class="weight-input-group">
+                        <label>平时成绩占比</label>
+                        <div class="weight-input-container">
+                          <input 
+                            type="range" 
+                            min="0" 
+                            max="100" 
+                            step="1"
+                            v-model.number="courseWeightFormAdmin.ordinary_weight_percent"
+                            @input="autoCalcCourseWeightPercent('ordinary')"
+                            class="weight-slider"
+                          />
+                          <input 
+                            type="number" 
+                            min="0" 
+                            max="100" 
+                            step="1"
+                            v-model.number="courseWeightFormAdmin.ordinary_weight_percent"
+                            @change="autoCalcCourseWeightPercent('ordinary')"
+                            class="weight-number-input"
+                          />
+                          <span class="weight-percent-label">%</span>
+                        </div>
+                      </div>
+                      <div class="weight-input-group">
+                        <label>期末成绩占比</label>
+                        <div class="weight-input-container">
+                          <input 
+                            type="range" 
+                            min="0" 
+                            max="100" 
+                            step="1"
+                            v-model.number="courseWeightFormAdmin.final_weight_percent"
+                            @input="autoCalcCourseWeightPercent('final')"
+                            class="weight-slider"
+                          />
+                          <input 
+                            type="number" 
+                            min="0" 
+                            max="100" 
+                            step="1"
+                            v-model.number="courseWeightFormAdmin.final_weight_percent"
+                            @change="autoCalcCourseWeightPercent('final')"
+                            class="weight-number-input"
+                          />
+                          <span class="weight-percent-label">%</span>
+                        </div>
+                      </div>
+                      <div class="weight-sum-display" :class="{ 'valid': Math.abs((courseWeightFormAdmin.ordinary_weight_percent + courseWeightFormAdmin.final_weight_percent) - 100) < 1 }">
+                        <span>占比和：<strong>{{ courseWeightFormAdmin.ordinary_weight_percent + courseWeightFormAdmin.final_weight_percent }}%</strong></span>
+                        <span v-if="Math.abs((courseWeightFormAdmin.ordinary_weight_percent + courseWeightFormAdmin.final_weight_percent) - 100) < 1" class="valid-mark">✓ 有效</span>
+                        <span v-else class="invalid-mark">✗ 必须等于100%</span>
+                      </div>
+                      <div class="weight-editor-actions">
+                        <button type="button" class="btn-cancel-sm" @click="currentEditingCourse = null">取消</button>
+                        <button type="button" class="btn-primary-sm" @click="saveCourseWeights" :disabled="Math.abs((courseWeightFormAdmin.ordinary_weight_percent + courseWeightFormAdmin.final_weight_percent) - 100) >= 1">保存</button>
+                      </div>
+                    </div>
+                  </div>
+                </transition>
               </div>
               <div class="empty-state" v-if="filteredCourses.length === 0 && courseSearch">
                 <p>未找到匹配的课程</p>
@@ -318,54 +392,12 @@
                           />
                         </label>
                       </div>
-                      <div class="form-row">
-                        <label class="form-group">
-                          <span class="label-text">平时占比</span>
-                          <div class="weight-input">
-                            <input 
-                              type="number" 
-                              step="0.01" 
-                              min="0" 
-                              max="1" 
-                              placeholder="0.5"
-                              :value="(gradeEditForm[e.id]?.ordinary_weight) ?? 0.5"
-                              @input="(event) => {
-                                if (!gradeEditForm[e.id]) gradeEditForm[e.id] = {};
-                                gradeEditForm[e.id].ordinary_weight = event.target.value ? parseFloat(event.target.value) : 0.5;
-                              }"
-                              @change="() => autoCalcWeight(e.id, 'ordinary')"
-                            />
-                            <span class="weight-percent">{{ (Number(gradeEditForm[e.id]?.ordinary_weight ?? 0.5) * 100).toFixed(0) }}%</span>
-                          </div>
-                        </label>
-                        <label class="form-group">
-                          <span class="label-text">期末占比</span>
-                          <div class="weight-input">
-                            <input 
-                              type="number" 
-                              step="0.01" 
-                              min="0" 
-                              max="1" 
-                              placeholder="0.5"
-                              :value="(gradeEditForm[e.id]?.final_weight) ?? 0.5"
-                              @input="(event) => {
-                                if (!gradeEditForm[e.id]) gradeEditForm[e.id] = {};
-                                gradeEditForm[e.id].final_weight = event.target.value ? parseFloat(event.target.value) : 0.5;
-                              }"
-                              @change="() => autoCalcWeight(e.id, 'final')"
-                            />
-                            <span class="weight-percent">{{ (Number(gradeEditForm[e.id]?.final_weight ?? 0.5) * 100).toFixed(0) }}%</span>
-                          </div>
-                        </label>
-                      </div>
-                      <div class="weight-info">
-                        占比和: <strong :class="{ valid: Math.abs(Number(gradeEditForm[e.id]?.ordinary_weight ?? 0.5) + Number(gradeEditForm[e.id]?.final_weight ?? 0.5) - 1) < 0.01 }">
-                          {{ (Number(gradeEditForm[e.id]?.ordinary_weight ?? 0.5) + Number(gradeEditForm[e.id]?.final_weight ?? 0.5)).toFixed(2) }}
-                        </strong>
+                      <div class="weight-info-readonly">
+                        <span>当前课程成绩占比：平时 {{ (Number(e.course_ordinary_weight ?? 0.5) * 100).toFixed(0) }}% / 期末 {{ (Number(e.course_final_weight ?? 0.5) * 100).toFixed(0) }}%</span>
                       </div>
                       <div class="preview-info">
                         <strong>预计最终成绩:</strong>
-                        {{ calcPreviewGrade(e.id) }}
+                        {{ calcPreviewGrade(e.id, e.course_ordinary_weight, e.course_final_weight) }}
                       </div>
                       <div class="editor-buttons">
                         <button class="btn-success-sm" @click="updateStudentGrades(e.id)" type="button">✓ 保存</button>
@@ -586,6 +618,8 @@
         </div>
       </article>
     </section>
+
+
   </div>
 </template>
 
@@ -625,6 +659,13 @@ const gradeInput = reactive({})
 const majorPlanForm = reactive({ major_name: '', description: '' })
 const planCourseForm = reactive({ plan_id: '', course_id: '', semester: '', is_required: true })
 const courseStatFilters = reactive({ code: '', name: '' })
+
+// 课程权重编辑
+const currentEditingCourse = ref(null)
+const courseWeightFormAdmin = reactive({ 
+  ordinary_weight_percent: 50, 
+  final_weight_percent: 50 
+})
 
 // 折叠状态
 const studentsCollapsed = ref(false)
@@ -838,6 +879,47 @@ async function deleteCourse(id) {
   }
 }
 
+function toggleCourseWeightEditor(course) {
+  if (currentEditingCourse.value?.id === course.id) {
+    currentEditingCourse.value = null
+  } else {
+    currentEditingCourse.value = course
+    courseWeightFormAdmin.ordinary_weight_percent = Math.round((course.ordinary_weight ?? 0.5) * 100)
+    courseWeightFormAdmin.final_weight_percent = Math.round((course.final_weight ?? 0.5) * 100)
+  }
+}
+
+function autoCalcCourseWeightPercent(changedField) {
+  if (changedField === 'ordinary') {
+    courseWeightFormAdmin.final_weight_percent = 100 - courseWeightFormAdmin.ordinary_weight_percent
+  } else if (changedField === 'final') {
+    courseWeightFormAdmin.ordinary_weight_percent = 100 - courseWeightFormAdmin.final_weight_percent
+  }
+}
+
+async function saveCourseWeights() {
+  const totalPercent = courseWeightFormAdmin.ordinary_weight_percent + courseWeightFormAdmin.final_weight_percent
+  if (Math.abs(totalPercent - 100) > 1) {
+    alert('占比和必须等于100%')
+    return
+  }
+  
+  try {
+    await api(`/courses/${currentEditingCourse.value.id}/weights`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        ordinary_weight: courseWeightFormAdmin.ordinary_weight_percent / 100,
+        final_weight: courseWeightFormAdmin.final_weight_percent / 100
+      })
+    })
+    alert('课程成绩占比更新成功！')
+    currentEditingCourse.value = null
+    await loadAll()
+  } catch (err) {
+    alert(`占比更新失败: ${err.message}`)
+  }
+}
+
 async function enroll() {
   await api('/enrollments', { method: 'POST', body: JSON.stringify(enrollForm) })
   enrollForm.student_id = ''
@@ -867,40 +949,21 @@ function toggleGradeEditor(enrollmentId) {
         ...gradeEditForm.value,
         [enrollmentId]: {
           ordinary_score: enrollment.ordinary_score ?? null,
-          final_score: enrollment.final_score ?? null,
-          ordinary_weight: enrollment.ordinary_weight ?? 0.5,
-          final_weight: enrollment.final_weight ?? 0.5,
+          final_score: enrollment.final_score ?? null
         },
       }
     }
   }
 }
 
-function autoCalcWeight(enrollmentId, changedField) {
-  const form = gradeEditForm.value[enrollmentId]
-  if (!form) return
-  
-  if (changedField === 'ordinary') {
-    const ow = form.ordinary_weight
-    if (ow !== undefined && ow !== null) {
-      form.final_weight = Math.round((1 - ow) * 100) / 100
-    }
-  } else if (changedField === 'final') {
-    const fw = form.final_weight
-    if (fw !== undefined && fw !== null) {
-      form.ordinary_weight = Math.round((1 - fw) * 100) / 100
-    }
-  }
-}
-
-function calcPreviewGrade(enrollmentId) {
+function calcPreviewGrade(enrollmentId, courseOrdinaryWeight = 0.5, courseFinalWeight = 0.5) {
   const form = gradeEditForm.value[enrollmentId]
   if (!form) return '—'
   
   const os = form.ordinary_score
   const fs = form.final_score
-  const ow = form.ordinary_weight || 0.5
-  const fw = form.final_weight || 0.5
+  const ow = courseOrdinaryWeight ?? 0.5
+  const fw = courseFinalWeight ?? 0.5
   
   if (os === null || os === undefined || fs === null || fs === undefined) {
     return '—'
@@ -914,19 +977,10 @@ async function updateStudentGrades(enrollmentId) {
   const form = gradeEditForm.value[enrollmentId]
   if (!form) return
   
-  // Validate weights sum to 1
-  const totalWeight = (form.ordinary_weight || 0.5) + (form.final_weight || 0.5)
-  if (Math.abs(totalWeight - 1) > 0.01) {
-    alert('占比和必须等于 1，当前为: ' + totalWeight.toFixed(2))
-    return
-  }
-  
   try {
     const payload = {
       ordinary_score: form.ordinary_score,
-      final_score: form.final_score,
-      ordinary_weight: form.ordinary_weight,
-      final_weight: form.final_weight,
+      final_score: form.final_score
     }
     
     await api(`/enrollments/${enrollmentId}/grades`, { 
@@ -1507,14 +1561,21 @@ input:focus, select:focus {
 
 .item-card {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
+  flex-direction: column;
+  gap: 0;
   padding: 14px 16px;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
   background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
   transition: all 0.2s ease;
+}
+
+.item-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
 }
 
 .item-card:hover {
@@ -1562,6 +1623,20 @@ input:focus, select:focus {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.item-meta-weights {
+  font-size: 11px;
+  color: #0ea5e9;
+  font-weight: 600;
+  margin-top: 6px;
+}
+
+.item-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 /* ===== ENROLLMENT STYLES ===== */
@@ -1759,6 +1834,16 @@ input:focus, select:focus {
 
 .weight-info strong:not(.valid) {
   color: #dc2626;
+}
+
+.weight-info-readonly {
+  padding: 10px;
+  border-radius: 8px;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  font-size: 13px;
+  color: #0c4a6e;
+  margin-bottom: 8px;
 }
 
 .preview-info {
@@ -2239,6 +2324,437 @@ input:focus, select:focus {
 
   .enrollment-item {
     padding: 12px;
+  }
+
+  /* Course Weight Editor Styles */
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+  }
+
+  .modal-dialog {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    max-width: 500px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    animation: modalSlideIn 0.3s ease-out;
+  }
+
+  @keyframes modalSlideIn {
+    from {
+      opacity: 0;
+      transform: translateY(-50px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    border-bottom: 1px solid #e0e0e0;
+  }
+
+  .modal-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #333;
+  }
+
+  .modal-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #999;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 0.2s;
+  }
+
+  .modal-close:hover {
+    background: #f0f0f0;
+    color: #333;
+  }
+
+  .modal-body {
+    padding: 24px;
+  }
+
+  .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 20px;
+    border-top: 1px solid #e0e0e0;
+    background: #fafafa;
+  }
+
+  /* Weight Editor Components */
+  .weight-section {
+    margin-bottom: 20px;
+  }
+
+  .weight-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 12px;
+    display: block;
+  }
+
+  .weight-inputs {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    margin-bottom: 16px;
+  }
+
+  .weight-input-group {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .weight-slider {
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background: #e0e0e0;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  .weight-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #4CAF50;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    transition: all 0.2s;
+  }
+
+  .weight-slider::-webkit-slider-thumb:hover {
+    background: #45a049;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+
+  .weight-slider::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #4CAF50;
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    transition: all 0.2s;
+  }
+
+  .weight-slider::-moz-range-thumb:hover {
+    background: #45a049;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+
+  .weight-input-box {
+    width: 80px;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    text-align: center;
+    transition: all 0.2s;
+  }
+
+  .weight-input-box:focus {
+    outline: none;
+    border-color: #4CAF50;
+    box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.1);
+  }
+
+  .weight-display {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    background: #f5f5f5;
+    border-radius: 4px;
+    margin-top: 12px;
+  }
+
+  .weight-sum {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .weight-sum-value {
+    font-weight: 600;
+    color: #333;
+  }
+
+  .weight-sum-value.valid {
+    color: #4CAF50;
+  }
+
+  .weight-sum-value.invalid {
+    color: #f44336;
+  }
+
+  .weight-status {
+    font-size: 12px;
+    color: #999;
+  }
+
+  /* Button Styles in Modal */
+  .modal-footer button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .modal-footer .btn-cancel {
+    background: #f0f0f0;
+    color: #333;
+  }
+
+  .modal-footer .btn-cancel:hover {
+    background: #e0e0e0;
+  }
+
+  .modal-footer .btn-save {
+    background: #4CAF50;
+    color: white;
+  }
+
+  .modal-footer .btn-save:hover:not(:disabled) {
+    background: #45a049;
+    box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
+  }
+
+  .modal-footer .btn-save:disabled {
+    background: #cccccc;
+    cursor: not-allowed;
+  }
+
+  .item-meta-weights {
+    color: #4CAF50;
+    font-size: 13px;
+    font-weight: 500;
+    margin: 6px 0;
+  }
+
+  .item-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  /* 内联权重编辑器样式 */
+  .inline-weight-editor {
+    width: 100%;
+    margin-top: 16px;
+    padding: 20px;
+    background: white;
+    border-radius: 8px;
+    border: 2px solid #4CAF50;
+    box-shadow: 0 2px 8px rgba(76, 175, 80, 0.15);
+  }
+
+  .weight-editor-header {
+    margin-bottom: 16px;
+  }
+
+  .weight-editor-header h4 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+    margin: 0;
+  }
+
+  .weight-editor-body {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .weight-input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .weight-input-group label {
+    font-size: 14px;
+    font-weight: 500;
+    color: #555;
+  }
+
+  .weight-input-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .weight-slider {
+    flex: 1;
+    height: 6px;
+    border-radius: 3px;
+    background: #e0e0e0;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  .weight-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #4CAF50;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    transition: all 0.2s;
+  }
+
+  .weight-slider::-webkit-slider-thumb:hover {
+    background: #45a049;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+
+  .weight-slider::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #4CAF50;
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    transition: all 0.2s;
+  }
+
+  .weight-slider::-moz-range-thumb:hover {
+    background: #45a049;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+
+  .weight-number-input {
+    width: 70px;
+    padding: 6px 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    text-align: center;
+    transition: all 0.2s;
+  }
+
+  .weight-number-input:focus {
+    outline: none;
+    border-color: #4CAF50;
+    box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.1);
+  }
+
+  .weight-percent-label {
+    font-size: 14px;
+    color: #666;
+    min-width: 20px;
+  }
+
+  .weight-sum-display {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: white;
+    border-radius: 6px;
+    border: 1px solid #e0e0e0;
+    font-size: 14px;
+  }
+
+  .weight-sum-display.valid {
+    border-color: #4CAF50;
+    background: #f1f8f4;
+  }
+
+  .valid-mark {
+    color: #4CAF50;
+    font-weight: 600;
+  }
+
+  .invalid-mark {
+    color: #f44336;
+    font-weight: 600;
+  }
+
+  .weight-editor-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  /* 下滑动画 */
+  .slide-down-enter-active {
+    animation: slideDown 0.3s ease-out;
+  }
+
+  .slide-down-leave-active {
+    animation: slideUp 0.3s ease-out;
+  }
+
+  @keyframes slideDown {
+    from {
+      opacity: 0;
+      max-height: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      max-height: 500px;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes slideUp {
+    from {
+      opacity: 1;
+      max-height: 500px;
+      transform: translateY(0);
+    }
+    to {
+      opacity: 0;
+      max-height: 0;
+      transform: translateY(-10px);
+    }
   }
 }
 </style>

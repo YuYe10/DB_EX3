@@ -135,35 +135,6 @@
                               placeholder="输入期末成绩"
                             />
                           </div>
-                          <div class="editor-group">
-                            <label>平时占比</label>
-                            <input 
-                              type="number" 
-                              min="0" 
-                              max="1" 
-                              step="0.01"
-                              :value="gradeEditForm[s.id]?.ordinary_weight ?? 0.5"
-                              @input="(e) => { if (!gradeEditForm[s.id]) gradeEditForm[s.id] = {}; gradeEditForm[s.id].ordinary_weight = e.target.value ? parseFloat(e.target.value) : 0.5; }"
-                              @change="() => autoCalcWeight(s.id, 'ordinary')"
-                              placeholder="0.5"
-                            />
-                            <span class="weight-percent">{{ (Number(gradeEditForm[s.id]?.ordinary_weight ?? 0.5) * 100).toFixed(0) }}%</span>
-                          </div>
-                          <div class="editor-group">
-                            <label>期末占比</label>
-                            <input 
-                              type="number" 
-                              min="0" 
-                              max="1" 
-                              step="0.01"
-                              :value="gradeEditForm[s.id]?.final_weight ?? 0.5"
-                              @input="(e) => { if (!gradeEditForm[s.id]) gradeEditForm[s.id] = {}; gradeEditForm[s.id].final_weight = e.target.value ? parseFloat(e.target.value) : 0.5; }"
-                              @change="() => autoCalcWeight(s.id, 'final')"
-                              placeholder="0.5"
-                            />
-                            <span class="weight-percent">{{ (Number(gradeEditForm[s.id]?.final_weight ?? 0.5) * 100).toFixed(0) }}%</span>
-                          </div>
-                          <div class="weight-sum">占比和: {{ (Number(gradeEditForm[s.id]?.ordinary_weight ?? 0.5) + Number(gradeEditForm[s.id]?.final_weight ?? 0.5)).toFixed(2) }}</div>
                           <div class="preview-grade">预计最终成绩: {{ calcPreviewGrade(s.id) }}</div>
                           <div class="editor-actions">
                             <button type="button" @click="updateGrades(s.id)" class="btn-primary-sm">✓ 保存</button>
@@ -261,6 +232,10 @@ const importSummary = ref(null)
 const courseStats = ref([])
 const expandedGradeEditors = ref({})
 const gradeEditForm = ref({})
+const courseWeightForm = reactive({
+  ordinary_weight: 0.5,
+  final_weight: 0.5
+})
 
 const selectedCourse = computed(() => myCourses.value.find(c => c.id === selectedCourseId.value))
 
@@ -305,6 +280,16 @@ async function loadCourseStats() {
 
 async function selectCourse(courseId) {
   selectedCourseId.value = courseId
+  expandedGradeEditors.value = {}
+  gradeEditForm.value = {}
+  
+  // Load course weights
+  const course = myCourses.value.find(c => c.id === courseId)
+  if (course) {
+    courseWeightForm.ordinary_weight = course.ordinary_weight ?? 0.5
+    courseWeightForm.final_weight = course.final_weight ?? 0.5
+  }
+  
   try {
     students.value = await api(`/teacher/courses/${courseId}/students`)
   } catch (error) {
@@ -323,29 +308,50 @@ function toggleGradeEditor(enrollmentId) {
         ...gradeEditForm.value,
         [enrollmentId]: {
           ordinary_score: enrollment.ordinary_score ?? null,
-          final_score: enrollment.final_score ?? null,
-          ordinary_weight: enrollment.ordinary_weight ?? 0.5,
-          final_weight: enrollment.final_weight ?? 0.5,
+          final_score: enrollment.final_score ?? null
         }
       }
     }
   }
 }
 
-function autoCalcWeight(enrollmentId, changedField) {
-  const form = gradeEditForm.value[enrollmentId]
-  if (!form) return
-  
+function autoCalcCourseWeight(changedField) {
   if (changedField === 'ordinary') {
-    const ow = form.ordinary_weight
+    const ow = courseWeightForm.ordinary_weight
     if (ow !== undefined && ow !== null) {
-      form.final_weight = Math.round((1 - ow) * 100) / 100
+      courseWeightForm.final_weight = Math.round((1 - ow) * 100) / 100
     }
   } else if (changedField === 'final') {
-    const fw = form.final_weight
+    const fw = courseWeightForm.final_weight
     if (fw !== undefined && fw !== null) {
-      form.ordinary_weight = Math.round((1 - fw) * 100) / 100
+      courseWeightForm.ordinary_weight = Math.round((1 - fw) * 100) / 100
     }
+  }
+}
+
+async function updateCourseWeights() {
+  if (!selectedCourseId.value) return
+  
+  const totalWeight = courseWeightForm.ordinary_weight + courseWeightForm.final_weight
+  if (Math.abs(totalWeight - 1) > 0.01) {
+    alert('占比和必须等于 1，当前为: ' + totalWeight.toFixed(2))
+    return
+  }
+  
+  try {
+    await api(`/teacher/courses/${selectedCourseId.value}/weights`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        ordinary_weight: courseWeightForm.ordinary_weight,
+        final_weight: courseWeightForm.final_weight
+      })
+    })
+    
+    alert('课程成绩占比更新成功！所有学生的最终成绩已重新计算。')
+    await loadCourses()
+    await selectCourse(selectedCourseId.value)
+  } catch (error) {
+    alert(`占比更新失败: ${error.message}`)
   }
 }
 
@@ -355,8 +361,8 @@ function calcPreviewGrade(enrollmentId) {
   
   const os = form.ordinary_score
   const fs = form.final_score
-  const ow = form.ordinary_weight || 0.5
-  const fw = form.final_weight || 0.5
+  const ow = courseWeightForm.ordinary_weight
+  const fw = courseWeightForm.final_weight
   
   if (os === null || os === undefined || fs === null || fs === undefined) {
     return '—'
@@ -377,18 +383,10 @@ async function updateGrades(enrollmentId) {
   const form = gradeEditForm.value[enrollmentId]
   if (!form) return
   
-  const totalWeight = (form.ordinary_weight || 0.5) + (form.final_weight || 0.5)
-  if (Math.abs(totalWeight - 1) > 0.01) {
-    alert('占比和必须等于 1，当前为: ' + totalWeight.toFixed(2))
-    return
-  }
-  
   try {
     const payload = {
       ordinary_score: form.ordinary_score,
-      final_score: form.final_score,
-      ordinary_weight: form.ordinary_weight,
-      final_weight: form.final_weight,
+      final_score: form.final_score
     }
     
     await api(`/teacher/enrollments/${enrollmentId}/grades`, {
@@ -674,9 +672,77 @@ onMounted(() => loadCourses())
 }
 
 .course-detail {
-  margin: 0;
+  margin: 0 0 16px 0;
   color: #64748b;
   font-size: 12px;
+}
+
+.course-code {
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.course-weights {
+  margin-top: 16px;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.weights-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 12px;
+}
+
+.weights-editor {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.weight-input-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.weight-input-group label {
+  font-size: 13px;
+  color: #64748b;
+  min-width: 100px;
+}
+
+.weight-input-group input {
+  width: 80px;
+  padding: 6px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.weight-percent {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 600;
+  min-width: 40px;
+}
+
+.weight-sum {
+  font-size: 13px;
+  font-weight: 600;
+  color: #059669;
+  padding: 6px 12px;
+  background: #d1fae5;
+  border-radius: 6px;
+}
+
+.weight-sum.weight-error {
+  color: #dc2626;
+  background: #fee2e2;
 }
 
 .student-table {

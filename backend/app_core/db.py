@@ -119,7 +119,9 @@ class Database:
                 capacity INT DEFAULT 50,
                 teacher_id INT REFERENCES teachers(id) ON DELETE SET NULL,
                 pass_rate NUMERIC(5,2),
-                excellent_rate NUMERIC(5,2)
+                excellent_rate NUMERIC(5,2),
+                ordinary_weight NUMERIC(3,2) DEFAULT 0.5,
+                final_weight NUMERIC(3,2) DEFAULT 0.5
             );
             """,
             """
@@ -131,8 +133,6 @@ class Database:
                 grade NUMERIC(4,1),
                 ordinary_score NUMERIC(4,1),
                 final_score NUMERIC(4,1),
-                ordinary_weight NUMERIC(3,2) DEFAULT 0.5,
-                final_weight NUMERIC(3,2) DEFAULT 0.5,
                 final_grade NUMERIC(4,1),
                 enrolled_at TIMESTAMP DEFAULT NOW(),
                 UNIQUE(student_id, course_id)
@@ -225,6 +225,22 @@ class Database:
                         """
                         DO $$
                         BEGIN
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='courses' AND column_name='ordinary_weight') THEN
+                                ALTER TABLE courses ADD COLUMN ordinary_weight NUMERIC(3,2) DEFAULT 0.5;
+                            END IF;
+                        END $$;
+                        """,
+                        """
+                        DO $$
+                        BEGIN
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='courses' AND column_name='final_weight') THEN
+                                ALTER TABLE courses ADD COLUMN final_weight NUMERIC(3,2) DEFAULT 0.5;
+                            END IF;
+                        END $$;
+                        """,
+                        """
+                        DO $$
+                        BEGIN
                             IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'enrollments_status_valid') THEN
                                 ALTER TABLE enrollments ADD CONSTRAINT enrollments_status_valid CHECK (status IN ('enrolled', 'dropped', 'completed'));
                             END IF;
@@ -273,22 +289,6 @@ class Database:
                         """
                         DO $$
                         BEGIN
-                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='enrollments' AND column_name='ordinary_weight') THEN
-                                ALTER TABLE enrollments ADD COLUMN ordinary_weight NUMERIC(3,2) DEFAULT 0.5;
-                            END IF;
-                        END $$;
-                        """,
-                        """
-                        DO $$
-                        BEGIN
-                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='enrollments' AND column_name='final_weight') THEN
-                                ALTER TABLE enrollments ADD COLUMN final_weight NUMERIC(3,2) DEFAULT 0.5;
-                            END IF;
-                        END $$;
-                        """,
-                        """
-                        DO $$
-                        BEGIN
                             IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='enrollments' AND column_name='final_grade') THEN
                                 ALTER TABLE enrollments ADD COLUMN final_grade NUMERIC(4,1);
                             END IF;
@@ -317,15 +317,7 @@ class Database:
                                 ALTER TABLE enrollments ADD CONSTRAINT enrollments_final_grade_range CHECK (final_grade IS NULL OR (final_grade >= 0 AND final_grade <= 100));
                             END IF;
                         END $$;
-                        """,
                         """
-                        DO $$
-                        BEGIN
-                            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'enrollments_weight_sum') THEN
-                                ALTER TABLE enrollments ADD CONSTRAINT enrollments_weight_sum CHECK (ordinary_weight + final_weight = 1);
-                            END IF;
-                        END $$;
-                        """,
         ]
 
         with self.get_cursor(autocommit=True) as cur:

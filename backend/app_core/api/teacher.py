@@ -66,20 +66,17 @@ def set_grade(enrollment_id: int):
 @teacher_bp.route('/enrollments/<int:enrollment_id>/grades', methods=['PUT'])
 @require_auth(['teacher'])
 def update_student_grades(enrollment_id: int):
-    """Update student grades including ordinary_score, final_score, and weights.
+    """Update student grades including ordinary_score and final_score.
+    Weights are now stored at course level, not per enrollment.
     
     Expected payload:
     {
         "ordinary_score": 80,    # 平时成绩 (0-100)
-        "final_score": 85,       # 期末成绩 (0-100)
-        "ordinary_weight": 0.4,  # 平时成绩占比 (0-1)
-        "final_weight": 0.6      # 期末成绩占比 (0-1)
+        "final_score": 85        # 期末成绩 (0-100)
     }
     
     Notes:
-    - ordinary_weight and final_weight must sum to 1
-    - If only one weight is provided, the other is calculated automatically
-    - final_grade is automatically calculated as: ordinary_score * ordinary_weight + final_score * final_weight
+    - final_grade is automatically calculated using course-level weights
     """
     payload = request.get_json(force=True)
     
@@ -88,6 +85,42 @@ def update_student_grades(enrollment_id: int):
         if not success:
             return error_response('权限检查失败或选课记录不存在', status=404)
         return json_response(message='Student grades updated successfully')
+    except ValueError as e:
+        return error_response(str(e))
+    except Exception as e:
+        return error_response(f'Update failed: {str(e)}', status=500)
+
+
+@teacher_bp.route('/courses/<int:course_id>/weights', methods=['PUT'])
+@require_auth(['teacher'])
+def update_course_weights(course_id: int):
+    """Update course grade weights.
+    
+    Expected payload:
+    {
+        "ordinary_weight": 0.4,  # 平时成绩占比 (0-1)
+        "final_weight": 0.6      # 期末成绩占比 (0-1)
+    }
+    
+    Notes:
+    - ordinary_weight and final_weight must sum to 1
+    - This updates the course-level default weights for all students
+    - All existing final_grade values in this course will be recalculated
+    """
+    payload = request.get_json(force=True)
+    
+    try:
+        if 'ordinary_weight' not in payload or 'final_weight' not in payload:
+            return error_response('ordinary_weight和final_weight为必填')
+        
+        ordinary_weight = float(payload['ordinary_weight'])
+        final_weight = float(payload['final_weight'])
+        
+        success = TeacherService.update_course_weights(session['ref_id'], course_id, ordinary_weight, final_weight)
+        if not success:
+            return error_response('权限检查失败或课程不存在', status=404)
+        
+        return json_response(message='课程成绩占比更新成功')
     except ValueError as e:
         return error_response(str(e))
     except Exception as e:

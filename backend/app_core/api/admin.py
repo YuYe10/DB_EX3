@@ -159,6 +159,23 @@ def update_course(course_id: int):
     return json_response(message='Course updated successfully')
 
 
+@admin_bp.route('/courses/<int:course_id>/weights', methods=['PUT'])
+@require_auth(['admin'])
+def update_course_weights(course_id: int):
+    """Update course grade weights."""
+    payload = request.get_json(force=True)
+    
+    try:
+        validate_fields(payload, ['ordinary_weight', 'final_weight'])
+        ordinary_weight = float(payload['ordinary_weight'])
+        final_weight = float(payload['final_weight'])
+        
+        AdminService.update_course_weights(course_id, ordinary_weight, final_weight)
+        return json_response(message='课程成绩占比更新成功')
+    except ValueError as e:
+        return error_response(str(e))
+
+
 # ========== Enrollments ========== #
 
 @admin_bp.route('/enrollments', methods=['GET', 'POST'])
