@@ -210,6 +210,38 @@ def set_grade(enrollment_id: int):
     return json_response(message='Grade updated successfully')
 
 
+@admin_bp.route('/enrollments/<int:enrollment_id>/grades', methods=['PUT'])
+@require_auth(['admin'])
+def update_student_grades(enrollment_id: int):
+    """Update student grades including ordinary_score, final_score, and weights.
+    
+    Expected payload:
+    {
+        "ordinary_score": 80,    # 平时成绩 (0-100)
+        "final_score": 85,       # 期末成绩 (0-100)
+        "ordinary_weight": 0.4,  # 平时成绩占比 (0-1)
+        "final_weight": 0.6      # 期末成绩占比 (0-1)
+    }
+    
+    Notes:
+    - ordinary_weight and final_weight must sum to 1
+    - If only one weight is provided, the other is calculated automatically
+    - final_grade is automatically calculated as: ordinary_score * ordinary_weight + final_score * final_weight
+    """
+    payload = request.get_json(force=True)
+    
+    try:
+        success = AdminService.update_student_grades(enrollment_id, payload)
+        if not success:
+            return error_response('No fields to update')
+        return json_response(message='Student grades updated successfully')
+    except ValueError as e:
+        return error_response(str(e))
+    except Exception as e:
+        return error_response(f'Update failed: {str(e)}', status=500)
+
+
+
 @admin_bp.route('/enrollments/<int:enrollment_id>', methods=['DELETE'])
 @require_auth(['admin'])
 def drop_course(enrollment_id: int):

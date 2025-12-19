@@ -246,7 +246,7 @@
         <div class="list" v-if="enrollments.length">
           <div class="list-header">
             <h3 class="list-title">📋 选课记录 ({{ filteredEnrollments.length }}/{{ enrollments.length }})</h3>
-            <button class="btn-collapse" @click="enrollmentsCollapsed = !enrollmentsCollapsed">
+            <button class="btn-collapse" @click="toggleEnrollmentsCollapsed">
               {{ enrollmentsCollapsed ? '展开 ▼' : '折叠 ▲' }}
             </button>
           </div>
@@ -268,16 +268,112 @@
                   </div>
                   <div class="enrollment-meta">
                     <span>教师: {{ e.teacher_name || '未分配' }}</span>
-                    <span class="grade-tag" v-if="e.grade !== null">成绩: <strong>{{ e.grade }}</strong></span>
+                    <div class="grade-display">
+                      <span class="grade-tag" v-if="e.ordinary_score !== null">平时: <strong>{{ e.ordinary_score }}</strong></span>
+                      <span class="grade-tag" v-if="e.final_score !== null">期末: <strong>{{ e.final_score }}</strong></span>
+                      <span class="grade-tag final" v-if="e.final_grade !== null">最终: <strong>{{ e.final_grade }}</strong></span>
+                      <span class="grade-tag" v-else-if="e.grade !== null">成绩: <strong>{{ e.grade }}</strong></span>
+                    </div>
                   </div>
                 </div>
                 <div class="enrollment-actions">
-                  <div class="grade-input-group">
-                    <input type="number" step="0.5" placeholder="输入成绩" v-model.number="gradeInput[e.id]" />
-                    <button class="btn-success-sm" @click="setGrade(e.id)" type="button">更新</button>
-                  </div>
+                  <button class="btn-info-sm" @click="toggleGradeEditor(e.id)" type="button">
+                    {{ expandedGradeEditors[e.id] ? '收起 ▲' : '编辑成绩 ▼' }}
+                  </button>
                   <button class="btn-danger-sm" @click="dropCourse(e.id)">退课</button>
                 </div>
+                <!-- Grade Editor Panel -->
+                <transition name="expand">
+                  <div v-show="expandedGradeEditors[e.id]" class="grade-editor-panel">
+                    <div class="editor-form">
+                      <div class="form-row">
+                        <label class="form-group">
+                          <span class="label-text">平时成绩 (0-100)</span>
+                          <input 
+                            type="number" 
+                            step="0.5" 
+                            min="0" 
+                            max="100" 
+                            placeholder="输入平时成绩"
+                            :value="(gradeEditForm[e.id]?.ordinary_score) ?? ''"
+                            @input="(event) => {
+                              if (!gradeEditForm[e.id]) gradeEditForm[e.id] = {};
+                              gradeEditForm[e.id].ordinary_score = event.target.value ? parseFloat(event.target.value) : null;
+                            }"
+                          />
+                        </label>
+                        <label class="form-group">
+                          <span class="label-text">期末成绩 (0-100)</span>
+                          <input 
+                            type="number" 
+                            step="0.5" 
+                            min="0" 
+                            max="100" 
+                            placeholder="输入期末成绩"
+                            :value="(gradeEditForm[e.id]?.final_score) ?? ''"
+                            @input="(event) => {
+                              if (!gradeEditForm[e.id]) gradeEditForm[e.id] = {};
+                              gradeEditForm[e.id].final_score = event.target.value ? parseFloat(event.target.value) : null;
+                            }"
+                          />
+                        </label>
+                      </div>
+                      <div class="form-row">
+                        <label class="form-group">
+                          <span class="label-text">平时占比</span>
+                          <div class="weight-input">
+                            <input 
+                              type="number" 
+                              step="0.01" 
+                              min="0" 
+                              max="1" 
+                              placeholder="0.5"
+                              :value="(gradeEditForm[e.id]?.ordinary_weight) ?? 0.5"
+                              @input="(event) => {
+                                if (!gradeEditForm[e.id]) gradeEditForm[e.id] = {};
+                                gradeEditForm[e.id].ordinary_weight = event.target.value ? parseFloat(event.target.value) : 0.5;
+                              }"
+                              @change="() => autoCalcWeight(e.id, 'ordinary')"
+                            />
+                            <span class="weight-percent">{{ (Number(gradeEditForm[e.id]?.ordinary_weight ?? 0.5) * 100).toFixed(0) }}%</span>
+                          </div>
+                        </label>
+                        <label class="form-group">
+                          <span class="label-text">期末占比</span>
+                          <div class="weight-input">
+                            <input 
+                              type="number" 
+                              step="0.01" 
+                              min="0" 
+                              max="1" 
+                              placeholder="0.5"
+                              :value="(gradeEditForm[e.id]?.final_weight) ?? 0.5"
+                              @input="(event) => {
+                                if (!gradeEditForm[e.id]) gradeEditForm[e.id] = {};
+                                gradeEditForm[e.id].final_weight = event.target.value ? parseFloat(event.target.value) : 0.5;
+                              }"
+                              @change="() => autoCalcWeight(e.id, 'final')"
+                            />
+                            <span class="weight-percent">{{ (Number(gradeEditForm[e.id]?.final_weight ?? 0.5) * 100).toFixed(0) }}%</span>
+                          </div>
+                        </label>
+                      </div>
+                      <div class="weight-info">
+                        占比和: <strong :class="{ valid: Math.abs(Number(gradeEditForm[e.id]?.ordinary_weight ?? 0.5) + Number(gradeEditForm[e.id]?.final_weight ?? 0.5) - 1) < 0.01 }">
+                          {{ (Number(gradeEditForm[e.id]?.ordinary_weight ?? 0.5) + Number(gradeEditForm[e.id]?.final_weight ?? 0.5)).toFixed(2) }}
+                        </strong>
+                      </div>
+                      <div class="preview-info">
+                        <strong>预计最终成绩:</strong>
+                        {{ calcPreviewGrade(e.id) }}
+                      </div>
+                      <div class="editor-buttons">
+                        <button class="btn-success-sm" @click="updateStudentGrades(e.id)" type="button">✓ 保存</button>
+                        <button class="btn-secondary-sm" @click="toggleGradeEditor(e.id)" type="button">取消</button>
+                      </div>
+                    </div>
+                  </div>
+                </transition>
               </div>
               <div class="empty-state" v-if="filteredEnrollments.length === 0 && enrollmentSearch">
                 <p>未找到匹配的选课记录</p>
@@ -514,6 +610,8 @@ const teachersCollapsed = ref(false)
 const coursesCollapsed = ref(false)
 const enrollmentsCollapsed = ref(false)
 const majorPlansCollapsed = ref(false)
+const expandedGradeEditors = ref({})
+const gradeEditForm = ref({})
 
 // 搜索/筛选条件
 const studentSearch = ref('')
@@ -597,6 +695,14 @@ const uniqueSemesters = computed(() => {
 
 function handleLogout() {
   emit('logout')
+}
+
+function toggleEnrollmentsCollapsed() {
+  enrollmentsCollapsed.value = !enrollmentsCollapsed.value
+  if (enrollmentsCollapsed.value) {
+    expandedGradeEditors.value = {}
+    gradeEditForm.value = {}
+  }
 }
 
 async function api(path, options = {}) {
@@ -701,6 +807,92 @@ async function setGrade(id) {
   if (grade === undefined || grade === '') return
   try {
     await api(`/enrollments/${id}/grade`, { method: 'PUT', body: JSON.stringify({ grade }) })
+    await loadAll()
+  } catch (err) {
+    alert(`成绩更新失败: ${err.message}`)
+  }
+}
+
+function toggleGradeEditor(enrollmentId) {
+  const current = expandedGradeEditors.value[enrollmentId] || false
+  expandedGradeEditors.value = { ...expandedGradeEditors.value, [enrollmentId]: !current }
+
+  if (!current) {
+    const enrollment = enrollments.value.find(e => e.id === enrollmentId)
+    if (enrollment) {
+      gradeEditForm.value = {
+        ...gradeEditForm.value,
+        [enrollmentId]: {
+          ordinary_score: enrollment.ordinary_score ?? null,
+          final_score: enrollment.final_score ?? null,
+          ordinary_weight: enrollment.ordinary_weight ?? 0.5,
+          final_weight: enrollment.final_weight ?? 0.5,
+        },
+      }
+    }
+  }
+}
+
+function autoCalcWeight(enrollmentId, changedField) {
+  const form = gradeEditForm.value[enrollmentId]
+  if (!form) return
+  
+  if (changedField === 'ordinary') {
+    const ow = form.ordinary_weight
+    if (ow !== undefined && ow !== null) {
+      form.final_weight = Math.round((1 - ow) * 100) / 100
+    }
+  } else if (changedField === 'final') {
+    const fw = form.final_weight
+    if (fw !== undefined && fw !== null) {
+      form.ordinary_weight = Math.round((1 - fw) * 100) / 100
+    }
+  }
+}
+
+function calcPreviewGrade(enrollmentId) {
+  const form = gradeEditForm.value[enrollmentId]
+  if (!form) return '—'
+  
+  const os = form.ordinary_score
+  const fs = form.final_score
+  const ow = form.ordinary_weight || 0.5
+  const fw = form.final_weight || 0.5
+  
+  if (os === null || os === undefined || fs === null || fs === undefined) {
+    return '—'
+  }
+  
+  const final = Number(os) * Number(ow) + Number(fs) * Number(fw)
+  return final.toFixed(1)
+}
+
+async function updateStudentGrades(enrollmentId) {
+  const form = gradeEditForm.value[enrollmentId]
+  if (!form) return
+  
+  // Validate weights sum to 1
+  const totalWeight = (form.ordinary_weight || 0.5) + (form.final_weight || 0.5)
+  if (Math.abs(totalWeight - 1) > 0.01) {
+    alert('占比和必须等于 1，当前为: ' + totalWeight.toFixed(2))
+    return
+  }
+  
+  try {
+    const payload = {
+      ordinary_score: form.ordinary_score,
+      final_score: form.final_score,
+      ordinary_weight: form.ordinary_weight,
+      final_weight: form.final_weight,
+    }
+    
+    await api(`/enrollments/${enrollmentId}/grades`, { 
+      method: 'PUT', 
+      body: JSON.stringify(payload) 
+    })
+    
+    alert('成绩更新成功')
+    toggleGradeEditor(enrollmentId)
     await loadAll()
   } catch (err) {
     alert(`成绩更新失败: ${err.message}`)
@@ -1382,6 +1574,18 @@ input:focus, select:focus {
   font-weight: 600;
 }
 
+.grade-tag.final {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+.grade-display {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
 .enrollment-actions {
   display: flex;
   gap: 8px;
@@ -1401,6 +1605,134 @@ input:focus, select:focus {
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   font-size: 13px;
+}
+
+.btn-info-sm {
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-weight: 600;
+  font-size: 12px;
+  background: #f0f9ff;
+  color: #0c4a6e;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-info-sm:hover {
+  background: #e0f2fe;
+  border-color: #7dd3fc;
+}
+
+.btn-secondary-sm {
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-weight: 600;
+  font-size: 12px;
+  background: #f3f4f6;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary-sm:hover {
+  background: #e5e7eb;
+  border-color: #9ca3af;
+}
+
+/* Grade Editor Panel */
+.grade-editor-panel {
+  margin-top: 12px;
+  padding: 16px;
+  border: 2px solid #3b82f6;
+  border-radius: 10px;
+  background: #f0f9ff;
+  display: block;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.editor-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.weight-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.weight-input input {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.weight-percent {
+  min-width: 45px;
+  text-align: right;
+  font-weight: 600;
+  color: #1e40af;
+  font-size: 12px;
+}
+
+.weight-info {
+  padding: 10px;
+  border-radius: 8px;
+  background: white;
+  border: 1px solid #bfdbfe;
+  font-size: 13px;
+  color: #0c4a6e;
+}
+
+.weight-info strong {
+  margin-left: 4px;
+  font-weight: 700;
+}
+
+.weight-info strong.valid {
+  color: #16a34a;
+}
+
+.weight-info strong:not(.valid) {
+  color: #dc2626;
+}
+
+.preview-info {
+  padding: 10px;
+  border-radius: 8px;
+  background: white;
+  border: 1px solid #dbeafe;
+  font-size: 13px;
+  color: #0c4a6e;
+  font-weight: 600;
+}
+
+.editor-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 8px;
 }
 
 /* ===== IMPORT / EXPORT ===== */
@@ -1597,6 +1929,28 @@ input:focus, select:focus {
   max-height: 0;
   opacity: 0;
   transform: translateY(-10px);
+}
+
+/* 独立的展开动画，避免与外层 collapse 冲突 */
+.expand-enter-active,
+.expand-leave-active {
+  transition: all 0.2s ease;
+  max-height: 800px;
+  overflow: hidden;
+}
+
+.expand-enter-from,
+.expand-leave-to {
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+.expand-enter-to,
+.expand-leave-from {
+  max-height: 800px;
+  opacity: 1;
+  transform: translateY(0);
 }
 
 /* ===== RESPONSIVE DESIGN ===== */

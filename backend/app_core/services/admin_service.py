@@ -174,7 +174,12 @@ class AdminService:
 
         enrollments = db.fetch_all(
             '''
-            SELECT s.student_no, s.name AS student_name, s.major, e.grade, e.status
+            SELECT 
+                s.student_no, 
+                s.name AS student_name, 
+                s.major, 
+                COALESCE(e.final_grade, e.grade) AS grade, 
+                e.status
             FROM enrollments e
             JOIN students s ON e.student_id = s.id
             WHERE e.course_id = %s
@@ -409,6 +414,90 @@ class AdminService:
         db.execute('UPDATE enrollments SET grade=%s WHERE id=%s', [grade, enrollment_id])
     
     @staticmethod
+    def update_student_grades(enrollment_id: int, data: Dict[str, Any]) -> bool:
+        """Update student grades including ordinary_score, final_score, and weights.
+        
+        Args:
+            enrollment_id: The enrollment ID to update
+            data: Dictionary containing:
+                - ordinary_score: 平时成绩 (0-100)
+                - final_score: 期末成绩 (0-100)
+                - ordinary_weight: 平时成绩占比 (0-1)
+                - final_weight: 期末成绩占比 (0-1)
+        
+        Returns:
+            bool: True if update successful, False otherwise
+        """
+        updates = []
+        params = []
+        
+        # Process ordinary_score
+        if 'ordinary_score' in data:
+            ordinary_score = data['ordinary_score']
+            if ordinary_score is not None:
+                try:
+                    ordinary_score = float(ordinary_score)
+                    if ordinary_score < 0 or ordinary_score > 100:
+                        raise ValueError('平时成绩必须在0-100之间')
+                except (ValueError, TypeError) as e:
+                    raise ValueError(f'平时成绩格式错误: {str(e)}')
+            updates.append('ordinary_score=%s')
+            params.append(ordinary_score)
+        
+        # Process final_score
+        if 'final_score' in data:
+            final_score = data['final_score']
+            if final_score is not None:
+                try:
+                    final_score = float(final_score)
+                    if final_score < 0 or final_score > 100:
+                        raise ValueError('期末成绩必须在0-100之间')
+                except (ValueError, TypeError) as e:
+                    raise ValueError(f'期末成绩格式错误: {str(e)}')
+            updates.append('final_score=%s')
+            params.append(final_score)
+        
+        # Process weights
+        ordinary_weight = data.get('ordinary_weight')
+        final_weight = data.get('final_weight')
+        
+        if ordinary_weight is not None or final_weight is not None:
+            # If only one weight is provided, calculate the other
+            if ordinary_weight is not None and final_weight is None:
+                final_weight = round(1 - float(ordinary_weight), 2)
+            elif final_weight is not None and ordinary_weight is None:
+                ordinary_weight = round(1 - float(final_weight), 2)
+            elif ordinary_weight is not None and final_weight is not None:
+                # Both provided, verify they sum to 1
+                total_weight = round(float(ordinary_weight) + float(final_weight), 2)
+                if abs(total_weight - 1.0) > 0.01:  # Allow small floating point errors
+                    raise ValueError(f'占比和必须为1，当前为{total_weight}')
+            
+            updates.append('ordinary_weight=%s')
+            params.append(ordinary_weight)
+            updates.append('final_weight=%s')
+            params.append(final_weight)
+        
+        if not updates:
+            return False
+        
+        # Calculate final_grade if both scores are provided
+        if 'ordinary_score' in data and 'final_score' in data:
+            ordinary_score = data.get('ordinary_score')
+            final_score = data.get('final_score')
+            
+            if ordinary_score is not None and final_score is not None:
+                ow = ordinary_weight if ordinary_weight is not None else 0.5
+                fw = final_weight if final_weight is not None else 0.5
+                final_grade = float(ordinary_score) * float(ow) + float(final_score) * float(fw)
+                updates.append('final_grade=%s')
+                params.append(round(final_grade, 1))
+        
+        params.append(enrollment_id)
+        db.execute(f"UPDATE enrollments SET {', '.join(updates)} WHERE id=%s", params)
+        return True
+    
+    @staticmethod
     def delete_enrollment(enrollment_id: int):
         """Delete an enrollment."""
         db.execute('DELETE FROM enrollments WHERE id=%s', [enrollment_id])
@@ -428,9 +517,14 @@ class AdminService:
             '''
         )
         
+        # Use final_grade when available; fall back to legacy grade
         course_avg = db.fetch_all(
             '''
-            SELECT c.id, c.name, c.course_code, ROUND(AVG(e.grade)::numeric, 2) AS avg_grade
+            SELECT 
+                c.id, 
+                c.name, 
+                c.course_code, 
+                ROUND(AVG(COALESCE(e.final_grade, e.grade))::numeric, 2) AS avg_grade
             FROM courses c
             LEFT JOIN enrollments e ON e.course_id = c.id
             GROUP BY c.id, c.name, c.course_code
