@@ -55,6 +55,37 @@ def set_grade(enrollment_id: int):
     return json_response(message='Grade updated successfully')
 
 
+@teacher_bp.route('/enrollments/<int:enrollment_id>/grades', methods=['PUT'])
+@require_auth(['teacher'])
+def update_student_grades(enrollment_id: int):
+    """Update student grades including ordinary_score, final_score, and weights.
+    
+    Expected payload:
+    {
+        "ordinary_score": 80,    # 平时成绩 (0-100)
+        "final_score": 85,       # 期末成绩 (0-100)
+        "ordinary_weight": 0.4,  # 平时成绩占比 (0-1)
+        "final_weight": 0.6      # 期末成绩占比 (0-1)
+    }
+    
+    Notes:
+    - ordinary_weight and final_weight must sum to 1
+    - If only one weight is provided, the other is calculated automatically
+    - final_grade is automatically calculated as: ordinary_score * ordinary_weight + final_score * final_weight
+    """
+    payload = request.get_json(force=True)
+    
+    try:
+        success = TeacherService.update_student_grades(session['ref_id'], enrollment_id, payload)
+        if not success:
+            return error_response('权限检查失败或选课记录不存在', status=404)
+        return json_response(message='Student grades updated successfully')
+    except ValueError as e:
+        return error_response(str(e))
+    except Exception as e:
+        return error_response(f'Update failed: {str(e)}', status=500)
+
+
 @teacher_bp.route('/courses/<int:course_id>/grades/export', methods=['GET'])
 @require_auth(['teacher'])
 def export_course_grades(course_id: int):

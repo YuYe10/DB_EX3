@@ -68,23 +68,90 @@
                     <th>学号</th>
                     <th>姓名</th>
                     <th>专业</th>
-                    <th>成绩</th>
+                    <th>最终成绩</th>
                     <th>操作</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="s in students" :key="s.id">
-                    <td>{{ s.student_no }}</td>
-                    <td><strong>{{ s.student_name }}</strong></td>
-                    <td>{{ s.major || '-' }}</td>
-                    <td>
-                      <span v-if="s.grade !== null" class="grade-display">{{ s.grade }}</span>
-                      <span v-else class="grade-display empty">未评分</span>
-                    </td>
-                    <td>
-                      <button @click="openGradeModal(s)" class="btn-grade">录入成绩</button>
-                    </td>
-                  </tr>
+                  <template v-for="s in students" :key="s.id">
+                    <tr>
+                      <td>{{ s.student_no }}</td>
+                      <td><strong>{{ s.student_name }}</strong></td>
+                      <td>{{ s.major || '-' }}</td>
+                      <td>
+                        <span v-if="s.final_grade !== null" class="grade-display">{{ s.final_grade }}</span>
+                        <span v-else-if="s.grade !== null" class="grade-display">{{ s.grade }}</span>
+                        <span v-else class="grade-display empty">未评分</span>
+                      </td>
+                      <td>
+                        <button @click="toggleGradeEditor(s.id)" class="btn-grade">{{ expandedGradeEditors[s.id] ? '收起' : '编辑成绩' }}</button>
+                      </td>
+                    </tr>
+                    <tr v-if="expandedGradeEditors[s.id]" class="grade-editor-row">
+                      <td colspan="5">
+                        <div class="grade-editor-inline">
+                          <div class="editor-group">
+                            <label>平时成绩 (0-100)</label>
+                            <input 
+                              type="number" 
+                              min="0" 
+                              max="100" 
+                              step="0.5"
+                              :value="gradeEditForm[s.id]?.ordinary_score ?? ''"
+                              @input="(e) => { if (!gradeEditForm[s.id]) gradeEditForm[s.id] = {}; gradeEditForm[s.id].ordinary_score = e.target.value ? parseFloat(e.target.value) : null; }"
+                              placeholder="输入平时成绩"
+                            />
+                          </div>
+                          <div class="editor-group">
+                            <label>期末成绩 (0-100)</label>
+                            <input 
+                              type="number" 
+                              min="0" 
+                              max="100" 
+                              step="0.5"
+                              :value="gradeEditForm[s.id]?.final_score ?? ''"
+                              @input="(e) => { if (!gradeEditForm[s.id]) gradeEditForm[s.id] = {}; gradeEditForm[s.id].final_score = e.target.value ? parseFloat(e.target.value) : null; }"
+                              placeholder="输入期末成绩"
+                            />
+                          </div>
+                          <div class="editor-group">
+                            <label>平时占比</label>
+                            <input 
+                              type="number" 
+                              min="0" 
+                              max="1" 
+                              step="0.01"
+                              :value="gradeEditForm[s.id]?.ordinary_weight ?? 0.5"
+                              @input="(e) => { if (!gradeEditForm[s.id]) gradeEditForm[s.id] = {}; gradeEditForm[s.id].ordinary_weight = e.target.value ? parseFloat(e.target.value) : 0.5; }"
+                              @change="() => autoCalcWeight(s.id, 'ordinary')"
+                              placeholder="0.5"
+                            />
+                            <span class="weight-percent">{{ (Number(gradeEditForm[s.id]?.ordinary_weight ?? 0.5) * 100).toFixed(0) }}%</span>
+                          </div>
+                          <div class="editor-group">
+                            <label>期末占比</label>
+                            <input 
+                              type="number" 
+                              min="0" 
+                              max="1" 
+                              step="0.01"
+                              :value="gradeEditForm[s.id]?.final_weight ?? 0.5"
+                              @input="(e) => { if (!gradeEditForm[s.id]) gradeEditForm[s.id] = {}; gradeEditForm[s.id].final_weight = e.target.value ? parseFloat(e.target.value) : 0.5; }"
+                              @change="() => autoCalcWeight(s.id, 'final')"
+                              placeholder="0.5"
+                            />
+                            <span class="weight-percent">{{ (Number(gradeEditForm[s.id]?.final_weight ?? 0.5) * 100).toFixed(0) }}%</span>
+                          </div>
+                          <div class="weight-sum">占比和: {{ (Number(gradeEditForm[s.id]?.ordinary_weight ?? 0.5) + Number(gradeEditForm[s.id]?.final_weight ?? 0.5)).toFixed(2) }}</div>
+                          <div class="preview-grade">预计最终成绩: {{ calcPreviewGrade(s.id) }}</div>
+                          <div class="editor-actions">
+                            <button type="button" @click="updateGrades(s.id)" class="btn-primary-sm">✓ 保存</button>
+                            <button type="button" @click="toggleGradeEditor(s.id)" class="btn-cancel-sm">取消</button>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  </template>
                 </tbody>
               </table>
             </div>
@@ -170,6 +237,8 @@ const exportError = ref('')
 const importLoading = ref(false)
 const importError = ref('')
 const importSummary = ref(null)
+const expandedGradeEditors = ref({})
+const gradeEditForm = ref({})
 
 const selectedCourse = computed(() => myCourses.value.find(c => c.id === selectedCourseId.value))
 
@@ -209,6 +278,91 @@ async function selectCourse(courseId) {
     students.value = await api(`/teacher/courses/${courseId}/students`)
   } catch (error) {
     console.error('加载学生列表失败:', error)
+  }
+}
+
+function toggleGradeEditor(enrollmentId) {
+  const current = expandedGradeEditors.value[enrollmentId] || false
+  expandedGradeEditors.value = { ...expandedGradeEditors.value, [enrollmentId]: !current }
+  
+  if (!current) {
+    const enrollment = students.value.find(s => s.id === enrollmentId)
+    if (enrollment) {
+      gradeEditForm.value = {
+        ...gradeEditForm.value,
+        [enrollmentId]: {
+          ordinary_score: enrollment.ordinary_score ?? null,
+          final_score: enrollment.final_score ?? null,
+          ordinary_weight: enrollment.ordinary_weight ?? 0.5,
+          final_weight: enrollment.final_weight ?? 0.5,
+        }
+      }
+    }
+  }
+}
+
+function autoCalcWeight(enrollmentId, changedField) {
+  const form = gradeEditForm.value[enrollmentId]
+  if (!form) return
+  
+  if (changedField === 'ordinary') {
+    const ow = form.ordinary_weight
+    if (ow !== undefined && ow !== null) {
+      form.final_weight = Math.round((1 - ow) * 100) / 100
+    }
+  } else if (changedField === 'final') {
+    const fw = form.final_weight
+    if (fw !== undefined && fw !== null) {
+      form.ordinary_weight = Math.round((1 - fw) * 100) / 100
+    }
+  }
+}
+
+function calcPreviewGrade(enrollmentId) {
+  const form = gradeEditForm.value[enrollmentId]
+  if (!form) return '—'
+  
+  const os = form.ordinary_score
+  const fs = form.final_score
+  const ow = form.ordinary_weight || 0.5
+  const fw = form.final_weight || 0.5
+  
+  if (os === null || os === undefined || fs === null || fs === undefined) {
+    return '—'
+  }
+  
+  const final = Number(os) * Number(ow) + Number(fs) * Number(fw)
+  return final.toFixed(1)
+}
+
+async function updateGrades(enrollmentId) {
+  const form = gradeEditForm.value[enrollmentId]
+  if (!form) return
+  
+  const totalWeight = (form.ordinary_weight || 0.5) + (form.final_weight || 0.5)
+  if (Math.abs(totalWeight - 1) > 0.01) {
+    alert('占比和必须等于 1，当前为: ' + totalWeight.toFixed(2))
+    return
+  }
+  
+  try {
+    const payload = {
+      ordinary_score: form.ordinary_score,
+      final_score: form.final_score,
+      ordinary_weight: form.ordinary_weight,
+      final_weight: form.final_weight,
+    }
+    
+    await api(`/teacher/enrollments/${enrollmentId}/grades`, {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    })
+    
+    alert('成绩更新成功')
+    toggleGradeEditor(enrollmentId)
+    await selectCourse(selectedCourseId.value)
+  } catch (error) {
+    alert(`成绩更新失败: ${error.message}`)
   }
 }
 
@@ -701,6 +855,118 @@ tbody tr:hover {
   border: none;
   background: linear-gradient(135deg, #8b5cf6, #7c3aed);
   color: white;
+}
+
+/* 成绩编辑器样式 */
+.grade-editor-row {
+  background: #f0f9ff;
+}
+
+.grade-editor-row td {
+  padding: 0;
+}
+
+.grade-editor-inline {
+  padding: 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.editor-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.editor-group label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #0c4a6e;
+}
+
+.editor-group input {
+  padding: 8px 10px;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  font-size: 12px;
+  background: white;
+}
+
+.editor-group input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.weight-percent {
+  display: inline-block;
+  min-width: 40px;
+  text-align: right;
+  font-weight: 600;
+  color: #1e40af;
+  font-size: 11px;
+  margin-left: 4px;
+}
+
+.weight-sum {
+  grid-column: 1 / -1;
+  padding: 8px;
+  background: white;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #0c4a6e;
+  font-weight: 600;
+}
+
+.preview-grade {
+  grid-column: 1 / -1;
+  padding: 8px;
+  background: #dcfce7;
+  border: 1px solid #86efac;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #166534;
+  font-weight: 600;
+}
+
+.editor-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.btn-primary-sm, .btn-cancel-sm {
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+}
+
+.btn-primary-sm {
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  color: white;
+}
+
+.btn-primary-sm:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(139,92,246,0.3);
+}
+
+.btn-cancel-sm {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.btn-cancel-sm:hover {
+  background: #e5e7eb;
 }
 
 @media (max-width: 768px) {

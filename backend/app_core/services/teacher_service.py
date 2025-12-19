@@ -75,6 +75,32 @@ class TeacherService:
         db.execute('UPDATE enrollments SET grade=%s WHERE id=%s', [grade, enrollment_id])
         return True
 
+    @staticmethod
+    def update_student_grades(teacher_id: int, enrollment_id: int, payload: Dict[str, Any]) -> bool:
+        """
+        Update student grades with weights (only if teacher teaches the course).
+        Delegates to AdminService for the actual update logic.
+        
+        Returns:
+            True if successful, False if enrollment not found or access denied
+        """
+        # Verify teacher teaches this course
+        enrollment = db.fetch_one(
+            '''
+            SELECT e.*, c.teacher_id
+            FROM enrollments e
+            JOIN courses c ON e.course_id = c.id
+            WHERE e.id = %s
+            ''',
+            [enrollment_id]
+        )
+        
+        if not enrollment or enrollment['teacher_id'] != teacher_id:
+            return False
+        
+        # Use AdminService for the actual update (same logic applies)
+        return AdminService.update_student_grades(enrollment_id, payload)
+
     # ===== Export ===== #
     @staticmethod
     def export_course_grades(teacher_id: int, course_id: int) -> Tuple[Any, Any]:
