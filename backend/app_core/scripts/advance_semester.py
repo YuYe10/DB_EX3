@@ -7,14 +7,12 @@ Intended to be scheduled (e.g., cron) to run daily/weekly. It only updates
 students whose `semester_updated_at` is at least 6 months old and whose
 `current_semester` is below the maximum (default 8).
 """
+
 import os
 import sys
 from datetime import datetime
 
-# Ensure app_core is on path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from db import db  # noqa: E402
+from app_core import db
 
 MAX_SEMESTER = int(os.getenv("MAX_SEMESTER", "8"))
 MONTHS_INTERVAL = os.getenv("SEMESTER_INTERVAL_MONTHS", "6")
