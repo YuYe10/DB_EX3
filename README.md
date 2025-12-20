@@ -135,7 +135,7 @@ VITE_API_BASE=http://<后端IP或域名>:5000/api
 
 ---
 
-## 📅 自动学期推进（半年 +1）
+## 📅 自动学期推进（半年+1）
 
 脚本： [backend/app_core/scripts/advance_semester.py](backend/app_core/scripts/advance_semester.py)
 

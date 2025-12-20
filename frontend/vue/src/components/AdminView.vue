@@ -552,7 +552,6 @@
                   </div>
                 </div>
                 <div class="item-actions">
-                  <button class="btn-secondary-sm" @click="editingPlanId = plan.id">编辑</button>
                   <button class="btn-danger-sm" @click="deleteMajorPlan(plan.id)">删除</button>
                 </div>
               </div>
