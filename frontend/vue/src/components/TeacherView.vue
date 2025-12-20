@@ -79,6 +79,79 @@
               </div>
             </div>
           </section>
+
+          <!-- 成绩占比设置面板 -->
+          <section class="card weight-settings-card">
+            <header class="card-header">
+              <h3>⚖️ 成绩占比设置</h3>
+              <p class="card-desc">设置平时成绩和期末成绩在最终成绩中的权重</p>
+            </header>
+            <div class="weight-settings-body">
+              <div class="current-weights">
+                <span class="weight-info">当前占比：平时 {{ ((courseWeightForm.ordinary_weight || 0) * 100).toFixed(0) }}% / 期末 {{ ((courseWeightForm.final_weight || 0) * 100).toFixed(0) }}%</span>
+              </div>
+              <div class="weight-controls">
+                <div class="weight-control-group">
+                  <label>平时成绩占比</label>
+                  <div class="weight-input-row">
+                    <input 
+                      type="range" 
+                      min="0" 
+                      max="1" 
+                      step="0.01"
+                      v-model.number="courseWeightForm.ordinary_weight"
+                      @input="onOrdinaryWeightChange"
+                      class="weight-slider"
+                    />
+                    <input 
+                      type="number" 
+                      min="0" 
+                      max="1" 
+                      step="0.01"
+                      v-model.number="courseWeightForm.ordinary_weight"
+                      @change="onOrdinaryWeightChange"
+                      class="weight-number"
+                    />
+                  </div>
+                </div>
+                <div class="weight-control-group">
+                  <label>期末成绩占比</label>
+                  <div class="weight-input-row">
+                    <input 
+                      type="range" 
+                      min="0" 
+                      max="1" 
+                      step="0.01"
+                      v-model.number="courseWeightForm.final_weight"
+                      @input="onFinalWeightChange"
+                      class="weight-slider"
+                    />
+                    <input 
+                      type="number" 
+                      min="0" 
+                      max="1" 
+                      step="0.01"
+                      v-model.number="courseWeightForm.final_weight"
+                      @change="onFinalWeightChange"
+                      class="weight-number"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div class="weight-sum-display" :class="{ valid: isWeightValid }">
+                占比和：{{ ((courseWeightForm.ordinary_weight || 0) + (courseWeightForm.final_weight || 0)).toFixed(2) }}
+                <span v-if="isWeightValid" class="valid-icon">✓ 有效</span>
+                <span v-else class="invalid-icon">✗ 必须等于1.0</span>
+              </div>
+              <button 
+                @click="saveCourseWeights" 
+                :disabled="!isWeightValid"
+                class="btn-primary"
+              >
+                保存成绩占比
+              </button>
+            </div>
+          </section>
           
           <div class="student-list">
             <div v-if="students.length === 0" class="empty-small">暂无学生选课</div>
@@ -239,6 +312,13 @@ const courseWeightForm = reactive({
 
 const selectedCourse = computed(() => myCourses.value.find(c => c.id === selectedCourseId.value))
 
+const isWeightValid = computed(() => {
+  const ow = Number(courseWeightForm.ordinary_weight) || 0
+  const fw = Number(courseWeightForm.final_weight) || 0
+  const sum = ow + fw
+  return Math.abs(sum - 1.0) < 0.01
+})
+
 async function api(path, options = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
     credentials: 'include',
@@ -286,8 +366,8 @@ async function selectCourse(courseId) {
   // Load course weights
   const course = myCourses.value.find(c => c.id === courseId)
   if (course) {
-    courseWeightForm.ordinary_weight = course.ordinary_weight ?? 0.5
-    courseWeightForm.final_weight = course.final_weight ?? 0.5
+    courseWeightForm.ordinary_weight = Number(course.ordinary_weight ?? 0.5)
+    courseWeightForm.final_weight = Number(course.final_weight ?? 0.5)
   }
   
   try {
@@ -317,22 +397,37 @@ function toggleGradeEditor(enrollmentId) {
 
 function autoCalcCourseWeight(changedField) {
   if (changedField === 'ordinary') {
-    const ow = courseWeightForm.ordinary_weight
-    if (ow !== undefined && ow !== null) {
+    const ow = Number(courseWeightForm.ordinary_weight)
+    if (!isNaN(ow)) {
       courseWeightForm.final_weight = Math.round((1 - ow) * 100) / 100
     }
   } else if (changedField === 'final') {
-    const fw = courseWeightForm.final_weight
-    if (fw !== undefined && fw !== null) {
+    const fw = Number(courseWeightForm.final_weight)
+    if (!isNaN(fw)) {
       courseWeightForm.ordinary_weight = Math.round((1 - fw) * 100) / 100
     }
   }
 }
 
+function onOrdinaryWeightChange() {
+  autoCalcCourseWeight('ordinary')
+}
+
+function onFinalWeightChange() {
+  autoCalcCourseWeight('final')
+}
+
+async function saveCourseWeights() {
+  await updateCourseWeights()
+}
+
 async function updateCourseWeights() {
   if (!selectedCourseId.value) return
   
-  const totalWeight = courseWeightForm.ordinary_weight + courseWeightForm.final_weight
+  const ow = Number(courseWeightForm.ordinary_weight) || 0
+  const fw = Number(courseWeightForm.final_weight) || 0
+  const totalWeight = ow + fw
+  
   if (Math.abs(totalWeight - 1) > 0.01) {
     alert('占比和必须等于 1，当前为: ' + totalWeight.toFixed(2))
     return
@@ -342,8 +437,8 @@ async function updateCourseWeights() {
     await api(`/teacher/courses/${selectedCourseId.value}/weights`, {
       method: 'PUT',
       body: JSON.stringify({
-        ordinary_weight: courseWeightForm.ordinary_weight,
-        final_weight: courseWeightForm.final_weight
+        ordinary_weight: ow,
+        final_weight: fw
       })
     })
     
@@ -1143,6 +1238,143 @@ tbody tr:hover {
 
 .btn-cancel-sm:hover {
   background: #e5e7eb;
+}
+
+/* 成绩占比设置样式 */
+.weight-settings-card {
+  margin-bottom: 24px;
+}
+
+.weight-settings-body {
+  padding: 20px;
+}
+
+.current-weights {
+  margin-bottom: 20px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border-radius: 8px;
+  border-left: 4px solid #0ea5e9;
+}
+
+.weight-info {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0c4a6e;
+}
+
+.weight-controls {
+  display: grid;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.weight-control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.weight-control-group label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.weight-input-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.weight-slider {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: #e2e8f0;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+
+.weight-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #8b5cf6;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s;
+}
+
+.weight-slider::-webkit-slider-thumb:hover {
+  background: #7c3aed;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transform: scale(1.1);
+}
+
+.weight-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #8b5cf6;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s;
+}
+
+.weight-slider::-moz-range-thumb:hover {
+  background: #7c3aed;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transform: scale(1.1);
+}
+
+.weight-number {
+  width: 80px;
+  padding: 8px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 14px;
+  text-align: center;
+  transition: all 0.2s;
+}
+
+.weight-number:focus {
+  outline: none;
+  border-color: #8b5cf6;
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.1);
+}
+
+.weight-sum-display {
+  padding: 12px 16px;
+  background: #fef3c7;
+  border: 2px solid #fbbf24;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #92400e;
+  margin-bottom: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.weight-sum-display.valid {
+  background: #d1fae5;
+  border-color: #10b981;
+  color: #065f46;
+}
+
+.valid-icon {
+  color: #10b981;
+}
+
+.invalid-icon {
+  color: #ef4444;
 }
 
 @media (max-width: 768px) {

@@ -76,7 +76,8 @@
                 <div class="enrollment-name">{{ e.course_name }}</div>
                 <div class="enrollment-meta">
                   {{ e.teacher_name || '暂无教师' }} · {{ e.credit }}学分
-                  <span v-if="e.grade !== null" class="grade-badge">成绩: {{ e.grade }}</span>
+                  <span v-if="e.final_grade !== null" class="grade-badge">最终成绩: {{ e.final_grade }}</span>
+                  <span v-else-if="e.grade !== null" class="grade-badge">成绩: {{ e.grade }}</span>
                   <span v-else class="grade-badge pending">未评分</span>
                 </div>
               </div>

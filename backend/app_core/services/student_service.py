@@ -82,7 +82,13 @@ class StudentService:
         return db.fetch_all(
             '''
             SELECT e.*, c.name AS course_name, c.course_code, c.credit,
-                   t.name AS teacher_name
+                   t.name AS teacher_name,
+                   CASE 
+                       WHEN e.ordinary_score IS NOT NULL AND e.final_score IS NOT NULL THEN
+                           ROUND(CAST(e.ordinary_score * COALESCE(c.ordinary_weight, 0.5) + 
+                                 e.final_score * COALESCE(c.final_weight, 0.5) AS NUMERIC), 2)
+                       ELSE e.grade
+                   END AS final_grade
             FROM enrollments e
             JOIN courses c ON e.course_id = c.id
             LEFT JOIN teachers t ON c.teacher_id = t.id
