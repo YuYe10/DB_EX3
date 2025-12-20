@@ -3,7 +3,9 @@
     <header class="hero">
       <div class="user-info">
         <h1>👨‍🎓 学生界面</h1>
-        <p>欢迎，<strong>{{ user.name }}</strong> ({{ user.student_no }})</p>
+        <p>欢迎，<strong>{{ user.name }}</strong> ({{ user.student_no }}) 
+          <span class="semester-badge">📅 第{{ studentInfo.current_semester }}学期</span>
+        </p>
       </div>
       <div class="actions">
         <button @click="showChangePassword = true" class="btn-secondary">修改密码</button>
@@ -41,24 +43,26 @@
           <div v-if="filteredCourses.length === 0" class="empty">
             {{ availableCourses.length === 0 ? '暂无可选课程' : '没有符合条件的课程' }}
           </div>
-          <div v-for="c in filteredCourses" :key="c.course_id || c.id" class="course-item">
+          <div v-for="c in filteredCourses" :key="c.course_id || c.id" class="course-item" :class="{ disabled: c.semester !== studentInfo.current_semester }">
             <div class="course-info">
               <div class="course-code">{{ c.course_code }}</div>
               <div class="course-details">
                 <div class="course-name">{{ c.course_name || c.name }}</div>
                 <div class="course-meta">
                   教师: {{ c.teacher_name || '待定' }} · {{ c.credit }}学分 · 
-                  已选{{ c.enrolled_count }}/{{ c.capacity }}
+                  第{{ c.semester }}学期 · 已选{{ c.enrolled_count }}/{{ c.capacity }}
                   <span v-if="c.enrolled_count >= c.capacity" class="full-badge">已满</span>
+                  <span v-if="c.semester !== studentInfo.current_semester" class="other-semester-badge">其他学期</span>
                 </div>
               </div>
             </div>
             <button 
               @click="enrollCourse(c.course_id || c.id)" 
               class="btn-enroll"
-              :disabled="c.enrolled_count >= c.capacity"
+              :disabled="c.enrolled_count >= c.capacity || c.semester !== studentInfo.current_semester"
+              :title="c.semester !== studentInfo.current_semester ? '只能选择当前学期的课程' : ''"
             >
-              {{ c.enrolled_count >= c.capacity ? '已满' : '选课' }}
+              {{ c.semester !== studentInfo.current_semester ? '其他学期' : (c.enrolled_count >= c.capacity ? '已满' : '选课') }}
             </button>
           </div>
         </div>
@@ -128,6 +132,7 @@ const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:5000/api'
 
 const availableCourses = ref([])
 const myEnrollments = ref([])
+const studentInfo = ref({ current_semester: 1 })
 const showChangePassword = ref(false)
 const errorMsg = ref('')
 const searchKeyword = ref('')
@@ -181,14 +186,18 @@ async function api(path, options = {}) {
 
 async function loadData() {
   try {
-    const [available, enrolled, semesters] = await Promise.all([
+    const [available, enrolled, semesters, info] = await Promise.all([
       api('/student/courses/available'),
       api('/student/enrollments'),
-      api('/student/semesters')
+      api('/student/semesters'),
+      api('/student/info')
     ])
     availableCourses.value = available
     myEnrollments.value = enrolled
     availableSemesters.value = semesters || []
+    if (info && info.current_semester) {
+      studentInfo.value = info
+    }
   } catch (error) {
     console.error('加载数据失败:', error)
   }
@@ -274,6 +283,17 @@ onMounted(() => {
   margin: 0;
   color: #64748b;
   font-size: 14px;
+}
+
+.semester-badge {
+  display: inline-block;
+  margin-left: 16px;
+  padding: 4px 12px;
+  background: #fef3c7;
+  color: #92400e;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 13px;
 }
 
 .actions {
@@ -387,6 +407,11 @@ onMounted(() => {
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1);
 }
 
+.course-item.disabled {
+  opacity: 0.7;
+  background: #f8fafc;
+}
+
 .course-info {
   display: flex;
   align-items: center;
@@ -458,6 +483,16 @@ onMounted(() => {
   padding: 2px 6px;
   background: #fee2e2;
   color: #b91c1c;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.other-semester-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  background: #e5e7eb;
+  color: #6b7280;
   border-radius: 4px;
   font-size: 11px;
   font-weight: 700;

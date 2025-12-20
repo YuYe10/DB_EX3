@@ -107,7 +107,9 @@ class Database:
                 id SERIAL PRIMARY KEY,
                 student_no VARCHAR(32) UNIQUE NOT NULL,
                 name VARCHAR(64) NOT NULL,
-                major VARCHAR(128) DEFAULT ''
+                major VARCHAR(128) DEFAULT '',
+                current_semester INT DEFAULT 1,
+                semester_updated_at TIMESTAMP DEFAULT NOW()
             );
             """,
             """
@@ -198,6 +200,17 @@ class Database:
                             END IF;
                         END $$;
                         """,
+                            """
+                            DO $$
+                            BEGIN
+                                IF NOT EXISTS (
+                                    SELECT 1 FROM information_schema.columns 
+                                    WHERE table_name='students' AND column_name='semester_updated_at'
+                                ) THEN
+                                    ALTER TABLE students ADD COLUMN semester_updated_at TIMESTAMP DEFAULT NOW();
+                                END IF;
+                            END $$;
+                            """,
                         """
                         DO $$
                         BEGIN

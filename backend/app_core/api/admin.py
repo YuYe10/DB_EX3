@@ -49,6 +49,11 @@ def update_student(student_id: int):
     
     # PUT - Update student
     payload = request.get_json(force=True)
+    if 'current_semester' in payload:
+        try:
+            validate_semester(int(payload['current_semester']))
+        except ValueError as e:
+            return error_response(str(e))
     success = AdminService.update_student(student_id, payload)
     
     if not success:

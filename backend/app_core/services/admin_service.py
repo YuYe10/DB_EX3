@@ -281,19 +281,30 @@ class AdminService:
     
     @staticmethod
     def update_student(student_id: int, data: Dict[str, Any]) -> bool:
-        """Update student information."""
-        fields = ['student_no', 'name', 'major']
+        """Update student information including current_semester."""
+        fields = ['student_no', 'name', 'major', 'current_semester']
         updates = []
         params = []
-        
+
         for field in fields:
             if field in data:
-                updates.append(f"{field}=%s")
-                params.append(data[field])
-        
+                if field == 'current_semester':
+                    try:
+                        sem_val = int(data[field])
+                    except (TypeError, ValueError):
+                        continue
+                    if sem_val < 1 or sem_val > 8:
+                        continue
+                    updates.append("current_semester=%s")
+                    params.append(sem_val)
+                    updates.append("semester_updated_at=NOW()")
+                else:
+                    updates.append(f"{field}=%s")
+                    params.append(data[field])
+
         if not updates:
             return False
-        
+
         params.append(student_id)
         db.execute(f"UPDATE students SET {', '.join(updates)} WHERE id=%s", params)
         return True

@@ -24,6 +24,7 @@ def main():
             "teacher_no": "T001",
             "teacher_name": "张老师",
             "teacher_department": "计算机学院",
+            "semester": 1,
         },
         {
             "course_code": "C002",
@@ -33,13 +34,34 @@ def main():
             "teacher_no": "T002",
             "teacher_name": "李老师",
             "teacher_department": "软件学院",
+            "semester": 1,
+        },
+        {
+            "course_code": "C003",
+            "name": "计算机网络",
+            "credit": 3,
+            "capacity": 55,
+            "teacher_no": "T003",
+            "teacher_name": "王老师",
+            "teacher_department": "计算机学院",
+            "semester": 2,
+        },
+        {
+            "course_code": "C004",
+            "name": "数据结构",
+            "credit": 4,
+            "capacity": 60,
+            "teacher_no": "T001",
+            "teacher_name": "张老师",
+            "teacher_department": "计算机学院",
+            "semester": 3,
         },
     ])
 
     students = pd.DataFrame([
-        {"student_no": "S001", "name": "王同学", "major": "计算机"},
-        {"student_no": "S002", "name": "李同学", "major": "软件工程"},
-        {"student_no": "S003", "name": "赵同学", "major": "人工智能"},
+        {"student_no": "S001", "name": "王同学", "major": "计算机", "current_semester": 1},
+        {"student_no": "S002", "name": "李同学", "major": "软件工程", "current_semester": 1},
+        {"student_no": "S003", "name": "赵同学", "major": "人工智能", "current_semester": 2},
     ])
 
     enrollments = pd.DataFrame([

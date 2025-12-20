@@ -77,7 +77,16 @@
                   <div class="item-badge">{{ s.student_no }}</div>
                   <div class="item-details">
                     <div class="item-name">{{ s.name }}</div>
-                    <div class="item-meta">{{ s.major || '未填专业' }}</div>
+                    <div class="item-meta">
+                      {{ s.major || '未填专业' }} · 第{{ s.current_semester || 1 }}学期
+                    </div>
+                    <div class="item-meta edit-semester-row">
+                      <label class="label-inline">学期</label>
+                      <select v-model.number="semesterEdit[s.id]" class="semester-select">
+                        <option v-for="opt in semesterOptions" :key="opt" :value="opt">第{{ opt }}学期</option>
+                      </select>
+                      <button class="btn-secondary-sm" @click="updateStudentSemester(s.id)">保存</button>
+                    </div>
                   </div>
                 </div>
                 <button class="btn-danger-sm" @click="deleteStudent(s.id)">删除</button>
@@ -659,6 +668,7 @@ const gradeInput = reactive({})
 const majorPlanForm = reactive({ major_name: '', description: '' })
 const planCourseForm = reactive({ plan_id: '', course_id: '', semester: '', is_required: true })
 const courseStatFilters = reactive({ code: '', name: '' })
+const semesterEdit = ref({})
 
 // 课程权重编辑
 const currentEditingCourse = ref(null)
@@ -797,6 +807,7 @@ async function loadAll() {
     api('/major-plans'),
   ])
   students.value = s
+  semesterEdit.value = Object.fromEntries((s || []).map(st => [st.id, st.current_semester || 1]))
   teachers.value = t
   courses.value = c
   enrollments.value = e
@@ -832,6 +843,17 @@ async function createStudent() {
   await api('/students', { method: 'POST', body: JSON.stringify(studentForm) })
   Object.assign(studentForm, { student_no: '', name: '', major: '' })
   await loadAll()
+}
+
+async function updateStudentSemester(id) {
+  const semester = semesterEdit.value[id]
+  if (!semester) return
+  try {
+    await api(`/students/${id}`, { method: 'PUT', body: JSON.stringify({ current_semester: semester }) })
+    await loadAll()
+  } catch (err) {
+    alert(`更新学期失败: ${err.message}`)
+  }
 }
 
 async function deleteStudent(id) {
@@ -1451,6 +1473,24 @@ input, select {
   outline: none;
   transition: all 0.3s ease;
   background: #f8fafc;
+}
+
+.edit-semester-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.label-inline {
+  font-size: 12px;
+  color: #475569;
+}
+
+.semester-select {
+  min-width: 120px;
+  padding: 8px 10px;
+  border-radius: 10px;
 }
 
 input::placeholder, select::placeholder {

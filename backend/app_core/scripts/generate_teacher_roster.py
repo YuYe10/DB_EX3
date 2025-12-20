@@ -20,13 +20,14 @@ def main():
             "name": "算法设计",
             "credit": 3,
             "capacity": 80,
+            "semester": 1,
         }
     ])
 
     students = pd.DataFrame([
-        {"student_no": "S1001", "name": "张同学", "major": "计算机"},
-        {"student_no": "S1002", "name": "李同学", "major": "软件工程"},
-        {"student_no": "S1003", "name": "王同学", "major": "人工智能"},
+        {"student_no": "S1001", "name": "张同学", "major": "计算机", "current_semester": 1},
+        {"student_no": "S1002", "name": "李同学", "major": "软件工程", "current_semester": 1},
+        {"student_no": "S1003", "name": "王同学", "major": "人工智能", "current_semester": 1},
     ])
 
     with pd.ExcelWriter(SAMPLE_PATH, engine="openpyxl") as writer:

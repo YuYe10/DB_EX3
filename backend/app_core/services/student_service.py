@@ -11,9 +11,9 @@ class StudentService:
     
     @staticmethod
     def get_student_info(student_id: int) -> Optional[Dict[str, Any]]:
-        """Get student information including major."""
+        """Get student information including major and current semester."""
         return db.fetch_one(
-            'SELECT id, student_no, name, major FROM students WHERE id = %s',
+            'SELECT id, student_no, name, major, current_semester FROM students WHERE id = %s',
             [student_id]
         )
     
@@ -103,13 +103,15 @@ class StudentService:
         """
         Enroll student in a course.
         
-        Validates that the course is available in the student's major plan.
+        Validates that:
+        1. The course is available in the student's major plan
+        2. The course is offered in the student's current semester
         
         Returns:
             New enrollment ID
         
         Raises:
-            ValueError: If course not in student's major plan, or plan doesn't exist
+            ValueError: If course not in student's major plan, semester mismatch, or other issues
         """
         from app_core.services.major_plan_service import MajorPlanService
         
@@ -123,14 +125,20 @@ class StudentService:
             raise ValueError(f'No major plan exists for major: {student["major"]}')
         
         # Verify course is in the student's major plan
-        plan_courses = db.fetch_all(
-            'SELECT course_id FROM major_plan_courses WHERE plan_id = %s',
-            [plan['id']]
+        plan_course = db.fetch_one(
+            'SELECT semester FROM major_plan_courses WHERE plan_id = %s AND course_id = %s',
+            [plan['id'], course_id]
         )
-        plan_course_ids = {pc['course_id'] for pc in plan_courses}
         
-        if course_id not in plan_course_ids:
+        if not plan_course:
             raise ValueError(f'Course {course_id} is not available in your major plan')
+        
+        # Check if course semester matches student's current semester
+        if plan_course['semester'] != student['current_semester']:
+            raise ValueError(
+                f'This course is offered in semester {plan_course["semester"]}, '
+                f'but you are currently in semester {student["current_semester"]}'
+            )
         
         # Check for duplicate enrollment
         existing = db.fetch_one(
