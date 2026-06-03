@@ -1,6 +1,0 @@
-\project{学生选课与成绩管理系统}{\hfill \textbf{全栈开发}}{Python / Flask / Vue 3 / PostgreSQL / Repository Pattern}
-\begin{itemize}
-  \item \textbf{内容}：基于 Flask + Vue 3 构建的学生选课与成绩管理系统，采用 \textbf{API → Service → Repository 三层架构}，设计包含 \textbf{7 张核心数据表}的数据库模型，支持三角色权限管理、学期限制选课、成绩加权计算、专业培养计划以及 Excel 批量导入导出等完整功能；通过连接池与 SSH 隧道实现安全的远程数据库访问，集成分级日志与操作审计机制。
-  
-  \item \textbf{贡献}：主导\textbf{数据库架构设计}，设计完整的\textbf{表结构、约束与索引优化}方案；实现基于 \textbf{PostgreSQL DO 块}的\textbf{条件迁移机制}，确保 schema 初始化的幂等性与增量升级能力；设计\textbf{参数化查询}接口，从底层杜绝 SQL 注入风险；构建\textbf{数据库连接池}与 \textbf{SSH 隧道}封装，保障生产环境连接安全性与稳定性；实现自动学期推进脚本，支持学生学期的自动化管理。
-\end{itemize}
