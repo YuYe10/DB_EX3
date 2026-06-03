@@ -18,9 +18,12 @@ class MajorPlanService:
         sql = """
             INSERT INTO major_plans (major_name, description)
             VALUES (%s, %s)
-            RETURNING id, major_name, description, created_at
         """
-        result = db.fetch_one(sql, [major_name, description])
+        new_id = db.execute_returning(sql, [major_name, description])
+        result = db.fetch_one(
+            "SELECT id, major_name, description, created_at FROM major_plans WHERE id = %s",
+            [new_id]
+        )
         logger.info(f"✅ Created major plan: {major_name}")
         return result
     
@@ -70,10 +73,10 @@ class MajorPlanService:
         sql = """
             INSERT INTO major_plans (major_name, description)
             VALUES (%s, %s)
-            ON CONFLICT (major_name) DO UPDATE SET updated_at = NOW()
-            RETURNING id, major_name, description, created_at, updated_at
+            ON DUPLICATE KEY UPDATE updated_at = NOW()
         """
-        created = db.fetch_one(sql, [major_name, description])
+        db.execute(sql, [major_name, description])
+        created = MajorPlanService.get_plan_by_major(major_name)
         logger.info(f"✅ Auto-created major plan for major: {major_name}")
         return created
     
@@ -83,9 +86,12 @@ class MajorPlanService:
         sql = """
             INSERT INTO major_plan_courses (plan_id, course_id, semester, is_required)
             VALUES (%s, %s, %s, %s)
-            RETURNING id, plan_id, course_id, semester, is_required, created_at
         """
-        result = db.fetch_one(sql, [plan_id, course_id, semester, is_required])
+        new_id = db.execute_returning(sql, [plan_id, course_id, semester, is_required])
+        result = db.fetch_one(
+            "SELECT id, plan_id, course_id, semester, is_required, created_at FROM major_plan_courses WHERE id = %s",
+            [new_id]
+        )
         logger.info(f"✅ Added course {course_id} to plan {plan_id} semester {semester}")
         return result
     
@@ -166,9 +172,12 @@ class MajorPlanService:
             UPDATE major_plans
             SET {', '.join(updates)}
             WHERE id = %s
-            RETURNING id, major_name, description, updated_at
         """
-        result = db.fetch_one(sql, params)
+        db.execute(sql, params)
+        result = db.fetch_one(
+            "SELECT id, major_name, description, updated_at FROM major_plans WHERE id = %s",
+            [plan_id]
+        )
         logger.info(f"✅ Updated major plan: {plan_id}")
         return result
     

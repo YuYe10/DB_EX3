@@ -1,20 +1,18 @@
 import os
 from contextlib import contextmanager
-from typing import Any, List, Optional, cast
+from typing import Any, List, Optional
 
-import psycopg2
-from psycopg2 import pool
-from psycopg2.extras import RealDictCursor
-from sshtunnel import SSHTunnelForwarder
+import pymysql
+from dbutils.pooled_db import PooledDB
 from dotenv import load_dotenv
 
 # Load .env sitting at repository root
-ENV_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), '.env')
+ENV_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), '.env')
 load_dotenv(ENV_PATH)
 
 
 class Database:
-    """Connection pool helper for openGauss/PostgreSQL."""
+    """Connection pool helper for MySQL."""
 
     def __init__(
         self,
@@ -24,61 +22,36 @@ class Database:
         user: Optional[str] = None,
         password: Optional[str] = None,
     ) -> None:
-        self.host = host or os.getenv('OG_HOST', 'localhost')
-        self.port = port or int(os.getenv('OG_PORT') or 26000)
-        self.dbname = dbname or os.getenv('OG_DBNAME', 'student_db')
-        self.user = user or os.getenv('OG_USER')
-        self.password = password or os.getenv('OG_PASSWORD')
-
-        # SSH tunneling config (optional)
-        self.use_ssh = os.getenv('OG_SSH_TUNNEL', 'false').lower() == 'true'
-        self.tunnel: Optional[SSHTunnelForwarder] = None
-        if self.use_ssh:
-            ssh_host = os.getenv('OG_SSH_HOST', self.host)
-            ssh_port = int(os.getenv('OG_SSH_PORT') or 22)
-            ssh_user = os.getenv('OG_SSH_USER')
-            ssh_password = os.getenv('OG_SSH_PASSWORD')
-            ssh_pkey = os.getenv('OG_SSH_PKEY')  # path to private key
-            remote_bind_host = self.host
-            remote_bind_port = self.port
-
-            if not ssh_user:
-                raise ValueError('OG_SSH_USER is required when OG_SSH_TUNNEL=true')
-
-            # Create SSH tunnel: local bind -> remote db host:port
-            self.tunnel = SSHTunnelForwarder(
-                (ssh_host, ssh_port),
-                ssh_username=ssh_user,
-                ssh_password=ssh_password,
-                ssh_pkey=ssh_pkey,
-                remote_bind_address=(remote_bind_host, remote_bind_port),
-                local_bind_address=('127.0.0.1', 0),  # auto-pick free local port
-            )
-            self.tunnel.start()
-            active_tunnel = cast(SSHTunnelForwarder, self.tunnel)
-            assert active_tunnel.local_bind_port is not None
-            self.host = '127.0.0.1'
-            self.port = int(active_tunnel.local_bind_port)
+        self.host = host or os.getenv('MYSQL_HOST', '127.0.0.1')
+        self.port = port or int(os.getenv('MYSQL_PORT', '3306'))
+        self.dbname = dbname or os.getenv('MYSQL_DBNAME', 'student_db')
+        self.user = user or os.getenv('MYSQL_USER')
+        self.password = password or os.getenv('MYSQL_PASSWORD')
 
         if not self.user or not self.password:
-            raise ValueError('Please set OG_USER and OG_PASSWORD in .env for openGauss access')
+            raise ValueError('Please set MYSQL_USER and MYSQL_PASSWORD in .env for MySQL access')
 
-        self.pool: pool.SimpleConnectionPool = pool.SimpleConnectionPool(
-            minconn=1,
-            maxconn=10,
+        self.pool: PooledDB = PooledDB(
+            creator=pymysql,
+            maxconnections=10,
+            mincached=1,
+            maxcached=5,
+            blocking=True,
             host=self.host,
             port=self.port,
-            dbname=self.dbname,
+            database=self.dbname,
             user=self.user,
             password=self.password,
+            charset='utf8mb4',
+            cursorclass=pymysql.cursors.DictCursor,
         )
 
     @contextmanager
     def get_cursor(self, autocommit: bool = False):
-        conn = self.pool.getconn()
+        conn = self.pool.connection()
         if autocommit:
             conn.autocommit = True
-        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur = conn.cursor()
         try:
             yield cur
             if not autocommit:
@@ -89,253 +62,190 @@ class Database:
             raise
         finally:
             cur.close()
-            self.pool.putconn(conn)
+            conn.close()  # PooledDB returns connection to pool on close()
+
+    # ── schema helpers ──────────────────────────────────────────────
+
+    def _index_exists(self, table: str, index_name: str) -> bool:
+        """Check whether an index exists on a table."""
+        row = self.fetch_one(
+            """SELECT COUNT(*) AS cnt FROM information_schema.STATISTICS
+               WHERE table_schema = DATABASE()
+                 AND table_name = %s
+                 AND index_name = %s""",
+            [table, index_name],
+        )
+        return row is not None and row['cnt'] > 0
+
+    def _column_exists(self, table: str, column: str) -> bool:
+        """Check whether a column exists in a table."""
+        row = self.fetch_one(
+            """SELECT COUNT(*) AS cnt FROM information_schema.COLUMNS
+               WHERE table_schema = DATABASE()
+                 AND table_name = %s
+                 AND column_name = %s""",
+            [table, column],
+        )
+        return row is not None and row['cnt'] > 0
+
+    def _constraint_exists(self, table: str, constraint_name: str) -> bool:
+        """Check whether a constraint exists on a table."""
+        row = self.fetch_one(
+            """SELECT COUNT(*) AS cnt FROM information_schema.TABLE_CONSTRAINTS
+               WHERE table_schema = DATABASE()
+                 AND table_name = %s
+                 AND constraint_name = %s""",
+            [table, constraint_name],
+        )
+        return row is not None and row['cnt'] > 0
+
+    def _add_column_if_not_exists(self, table: str, column: str, column_def: str) -> None:
+        """Add a column to a table if it doesn't already exist."""
+        if not self._column_exists(table, column):
+            self.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_def}")
+
+    def _add_constraint_if_not_exists(self, table: str, constraint_name: str, clause: str) -> None:
+        """Add a constraint to a table if it doesn't already exist."""
+        if not self._constraint_exists(table, constraint_name):
+            self.execute(f"ALTER TABLE {table} ADD CONSTRAINT {constraint_name} {clause}")
 
     def init_schema(self) -> None:
         """Create base tables if they do not exist."""
-        statements = [
+
+        # ── tables ──────────────────────────────────────────────────
+        table_statements = [
             """
             CREATE TABLE IF NOT EXISTS teachers (
-                id SERIAL PRIMARY KEY,
+                id INT AUTO_INCREMENT PRIMARY KEY,
                 teacher_no VARCHAR(32) UNIQUE NOT NULL,
                 name VARCHAR(64) NOT NULL,
                 department VARCHAR(128) DEFAULT ''
-            );
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
             """,
             """
             CREATE TABLE IF NOT EXISTS students (
-                id SERIAL PRIMARY KEY,
+                id INT AUTO_INCREMENT PRIMARY KEY,
                 student_no VARCHAR(32) UNIQUE NOT NULL,
                 name VARCHAR(64) NOT NULL,
                 major VARCHAR(128) DEFAULT '',
                 current_semester INT DEFAULT 1,
-                semester_updated_at TIMESTAMP DEFAULT NOW()
-            );
+                semester_updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
             """,
             """
             CREATE TABLE IF NOT EXISTS courses (
-                id SERIAL PRIMARY KEY,
+                id INT AUTO_INCREMENT PRIMARY KEY,
                 course_code VARCHAR(32) UNIQUE NOT NULL,
                 name VARCHAR(128) NOT NULL,
-                credit NUMERIC(3,1) DEFAULT 0,
+                credit DECIMAL(3,1) DEFAULT 0,
                 capacity INT DEFAULT 50,
-                teacher_id INT REFERENCES teachers(id) ON DELETE SET NULL,
-                pass_rate NUMERIC(5,2),
-                excellent_rate NUMERIC(5,2),
-                ordinary_weight NUMERIC(3,2) DEFAULT 0.5,
-                final_weight NUMERIC(3,2) DEFAULT 0.5
-            );
+                teacher_id INT,
+                pass_rate DECIMAL(5,2),
+                excellent_rate DECIMAL(5,2),
+                ordinary_weight DECIMAL(3,2) DEFAULT 0.5,
+                final_weight DECIMAL(3,2) DEFAULT 0.5,
+                FOREIGN KEY (teacher_id) REFERENCES teachers(id) ON DELETE SET NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
             """,
             """
             CREATE TABLE IF NOT EXISTS enrollments (
-                id SERIAL PRIMARY KEY,
-                student_id INT REFERENCES students(id) ON DELETE CASCADE,
-                course_id INT REFERENCES courses(id) ON DELETE CASCADE,
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                student_id INT NOT NULL,
+                course_id INT NOT NULL,
                 status VARCHAR(32) DEFAULT 'enrolled',
-                grade NUMERIC(4,1),
-                ordinary_score NUMERIC(4,1),
-                final_score NUMERIC(4,1),
-                final_grade NUMERIC(4,1),
-                enrolled_at TIMESTAMP DEFAULT NOW(),
-                UNIQUE(student_id, course_id)
-            );
+                grade DECIMAL(4,1),
+                ordinary_score DECIMAL(4,1),
+                final_score DECIMAL(4,1),
+                final_grade DECIMAL(4,1),
+                enrolled_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(student_id, course_id),
+                FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
+                FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
             """,
             """
             CREATE TABLE IF NOT EXISTS users (
-                id SERIAL PRIMARY KEY,
+                id INT AUTO_INCREMENT PRIMARY KEY,
                 username VARCHAR(64) UNIQUE NOT NULL,
                 password VARCHAR(256) NOT NULL,
                 role VARCHAR(32) NOT NULL,
                 ref_id INT,
-                created_at TIMESTAMP DEFAULT NOW()
-            );
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
             """,
             """
             CREATE TABLE IF NOT EXISTS major_plans (
-                id SERIAL PRIMARY KEY,
+                id INT AUTO_INCREMENT PRIMARY KEY,
                 major_name VARCHAR(128) NOT NULL,
-                description TEXT DEFAULT '',
-                created_at TIMESTAMP DEFAULT NOW(),
-                updated_at TIMESTAMP DEFAULT NOW(),
+                description VARCHAR(1024) DEFAULT '',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(major_name)
-            );
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
             """,
             """
             CREATE TABLE IF NOT EXISTS major_plan_courses (
-                id SERIAL PRIMARY KEY,
-                plan_id INT REFERENCES major_plans(id) ON DELETE CASCADE,
-                course_id INT REFERENCES courses(id) ON DELETE CASCADE,
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                plan_id INT NOT NULL,
+                course_id INT NOT NULL,
                 semester INT NOT NULL,
-                is_required BOOLEAN DEFAULT TRUE,
-                created_at TIMESTAMP DEFAULT NOW(),
-                UNIQUE(plan_id, course_id, semester)
-            );
+                is_required TINYINT(1) DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(plan_id, course_id, semester),
+                FOREIGN KEY (plan_id) REFERENCES major_plans(id) ON DELETE CASCADE,
+                FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
             """,
-            """
-            CREATE INDEX IF NOT EXISTS idx_enrollments_course ON enrollments(course_id);
-            """,
-            """
-            CREATE INDEX IF NOT EXISTS idx_enrollments_student ON enrollments(student_id);
-            """,
-            """
-            CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
-            """,
-                        """
-                        ALTER TABLE enrollments ALTER COLUMN student_id SET NOT NULL;
-                        """,
-                        """
-                        ALTER TABLE enrollments ALTER COLUMN course_id SET NOT NULL;
-                        """,
-                        """
-                        ALTER TABLE major_plan_courses ALTER COLUMN plan_id SET NOT NULL;
-                        """,
-                        """
-                        ALTER TABLE major_plan_courses ALTER COLUMN course_id SET NOT NULL;
-                        """,
-                        """
-                        DO $$
-                        BEGIN
-                            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'courses_credit_nonneg') THEN
-                                ALTER TABLE courses ADD CONSTRAINT courses_credit_nonneg CHECK (credit >= 0);
-                            END IF;
-                        END $$;
-                        """,
-                            """
-                            DO $$
-                            BEGIN
-                                IF NOT EXISTS (
-                                    SELECT 1 FROM information_schema.columns 
-                                    WHERE table_name='students' AND column_name='semester_updated_at'
-                                ) THEN
-                                    ALTER TABLE students ADD COLUMN semester_updated_at TIMESTAMP DEFAULT NOW();
-                                END IF;
-                            END $$;
-                            """,
-                        """
-                        DO $$
-                        BEGIN
-                            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'courses_capacity_positive') THEN
-                                ALTER TABLE courses ADD CONSTRAINT courses_capacity_positive CHECK (capacity > 0);
-                            END IF;
-                        END $$;
-                        """,
-                        """
-                        DO $$
-                        BEGIN
-                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='courses' AND column_name='pass_rate') THEN
-                                ALTER TABLE courses ADD COLUMN pass_rate NUMERIC(5,2);
-                            END IF;
-                        END $$;
-                        """,
-                        """
-                        DO $$
-                        BEGIN
-                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='courses' AND column_name='excellent_rate') THEN
-                                ALTER TABLE courses ADD COLUMN excellent_rate NUMERIC(5,2);
-                            END IF;
-                        END $$;
-                        """,
-                        """
-                        DO $$
-                        BEGIN
-                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='courses' AND column_name='ordinary_weight') THEN
-                                ALTER TABLE courses ADD COLUMN ordinary_weight NUMERIC(3,2) DEFAULT 0.5;
-                            END IF;
-                        END $$;
-                        """,
-                        """
-                        DO $$
-                        BEGIN
-                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='courses' AND column_name='final_weight') THEN
-                                ALTER TABLE courses ADD COLUMN final_weight NUMERIC(3,2) DEFAULT 0.5;
-                            END IF;
-                        END $$;
-                        """,
-                        """
-                        DO $$
-                        BEGIN
-                            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'enrollments_status_valid') THEN
-                                ALTER TABLE enrollments ADD CONSTRAINT enrollments_status_valid CHECK (status IN ('enrolled', 'dropped', 'completed'));
-                            END IF;
-                        END $$;
-                        """,
-                        """
-                        DO $$
-                        BEGIN
-                            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'enrollments_grade_range') THEN
-                                ALTER TABLE enrollments ADD CONSTRAINT enrollments_grade_range CHECK (grade IS NULL OR (grade >= 0 AND grade <= 100));
-                            END IF;
-                        END $$;
-                        """,
-                        """
-                        DO $$
-                        BEGIN
-                            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'major_plan_courses_semester_range') THEN
-                                ALTER TABLE major_plan_courses ADD CONSTRAINT major_plan_courses_semester_range CHECK (semester BETWEEN 1 AND 12);
-                            END IF;
-                        END $$;
-                        """,
-                        """
-                        DO $$
-                        BEGIN
-                            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_role_valid') THEN
-                                ALTER TABLE users ADD CONSTRAINT users_role_valid CHECK (role IN ('admin', 'student', 'teacher'));
-                            END IF;
-                        END $$;
-                        """,
-                        """
-                        DO $$
-                        BEGIN
-                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='enrollments' AND column_name='ordinary_score') THEN
-                                ALTER TABLE enrollments ADD COLUMN ordinary_score NUMERIC(4,1);
-                            END IF;
-                        END $$;
-                        """,
-                        """
-                        DO $$
-                        BEGIN
-                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='enrollments' AND column_name='final_score') THEN
-                                ALTER TABLE enrollments ADD COLUMN final_score NUMERIC(4,1);
-                            END IF;
-                        END $$;
-                        """,
-                        """
-                        DO $$
-                        BEGIN
-                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='enrollments' AND column_name='final_grade') THEN
-                                ALTER TABLE enrollments ADD COLUMN final_grade NUMERIC(4,1);
-                            END IF;
-                        END $$;
-                        """,
-                        """
-                        DO $$
-                        BEGIN
-                            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'enrollments_ordinary_score_range') THEN
-                                ALTER TABLE enrollments ADD CONSTRAINT enrollments_ordinary_score_range CHECK (ordinary_score IS NULL OR (ordinary_score >= 0 AND ordinary_score <= 100));
-                            END IF;
-                        END $$;
-                        """,
-                        """
-                        DO $$
-                        BEGIN
-                            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'enrollments_final_score_range') THEN
-                                ALTER TABLE enrollments ADD CONSTRAINT enrollments_final_score_range CHECK (final_score IS NULL OR (final_score >= 0 AND final_score <= 100));
-                            END IF;
-                        END $$;
-                        """,
-                        """
-                        DO $$
-                        BEGIN
-                            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'enrollments_final_grade_range') THEN
-                                ALTER TABLE enrollments ADD CONSTRAINT enrollments_final_grade_range CHECK (final_grade IS NULL OR (final_grade >= 0 AND final_grade <= 100));
-                            END IF;
-                        END $$;
-                        """
         ]
 
         with self.get_cursor(autocommit=True) as cur:
-            for stmt in statements:
+            for stmt in table_statements:
                 cur.execute(stmt)
+
+        # ── indexes ─────────────────────────────────────────────────
+        indexes = [
+            ('idx_enrollments_course', 'enrollments', 'course_id'),
+            ('idx_enrollments_student', 'enrollments', 'student_id'),
+            ('idx_users_username', 'users', 'username'),
+        ]
+        for idx_name, tbl, col in indexes:
+            if not self._index_exists(tbl, idx_name):
+                self.execute(f"CREATE INDEX {idx_name} ON {tbl}({col})")
+
+        # ── conditional columns (migration-safe) ────────────────────
+        self._add_column_if_not_exists('students', 'semester_updated_at',
+                                       "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+        self._add_column_if_not_exists('courses', 'pass_rate', 'DECIMAL(5,2)')
+        self._add_column_if_not_exists('courses', 'excellent_rate', 'DECIMAL(5,2)')
+        self._add_column_if_not_exists('courses', 'ordinary_weight', "DECIMAL(3,2) DEFAULT 0.5")
+        self._add_column_if_not_exists('courses', 'final_weight', "DECIMAL(3,2) DEFAULT 0.5")
+        self._add_column_if_not_exists('enrollments', 'ordinary_score', 'DECIMAL(4,1)')
+        self._add_column_if_not_exists('enrollments', 'final_score', 'DECIMAL(4,1)')
+        self._add_column_if_not_exists('enrollments', 'final_grade', 'DECIMAL(4,1)')
+
+        # ── conditional constraints (migration-safe) ────────────────
+        constraints = [
+            ('courses_credit_nonneg', 'courses', 'CHECK (credit >= 0)'),
+            ('courses_capacity_positive', 'courses', 'CHECK (capacity > 0)'),
+            ('enrollments_status_valid', 'enrollments',
+             "CHECK (status IN ('enrolled', 'dropped', 'completed'))"),
+            ('enrollments_grade_range', 'enrollments',
+             'CHECK (grade IS NULL OR (grade >= 0 AND grade <= 100))'),
+            ('enrollments_ordinary_score_range', 'enrollments',
+             'CHECK (ordinary_score IS NULL OR (ordinary_score >= 0 AND ordinary_score <= 100))'),
+            ('enrollments_final_score_range', 'enrollments',
+             'CHECK (final_score IS NULL OR (final_score >= 0 AND final_score <= 100))'),
+            ('enrollments_final_grade_range', 'enrollments',
+             'CHECK (final_grade IS NULL OR (final_grade >= 0 AND final_grade <= 100))'),
+            ('major_plan_courses_semester_range', 'major_plan_courses',
+             'CHECK (semester BETWEEN 1 AND 12)'),
+            ('users_role_valid', 'users',
+             "CHECK (role IN ('admin', 'student', 'teacher'))"),
+        ]
+        for cname, tbl, clause in constraints:
+            self._add_constraint_if_not_exists(tbl, cname, clause)
+
+    # ── query helpers ───────────────────────────────────────────────
 
     def fetch_all(self, sql: str, params: Optional[List[Any]] = None):
         with self.get_cursor() as cur:
@@ -355,10 +265,7 @@ class Database:
     def execute_returning(self, sql: str, params: Optional[List[Any]] = None):
         with self.get_cursor() as cur:
             cur.execute(sql, params or [])
-            row = cur.fetchone()
-            if row:
-                return list(row.values())[0]
-            return None
+            return cur.lastrowid
 
 
 db = Database()
@@ -366,8 +273,5 @@ db.init_schema()
 
 
 def shutdown():
-    """Cleanly close pool and SSH tunnel (if any)."""
-    db.pool.closeall()
-    if isinstance(getattr(db, 'tunnel', None), SSHTunnelForwarder):
-        active_tunnel = cast(SSHTunnelForwarder, db.tunnel)
-        active_tunnel.stop()
+    """Cleanly close pool."""
+    db.pool.close()

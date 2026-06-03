@@ -96,7 +96,7 @@ class UserService:
     def create_user(username: str, password: str, role: str, ref_id: Optional[int] = None) -> int:
         """Create a new user account."""
         user_id = db.execute_returning(
-            "INSERT INTO users (username, password, role, ref_id) VALUES (%s, %s, %s, %s) RETURNING id",
+            "INSERT INTO users (username, password, role, ref_id) VALUES (%s, %s, %s, %s)",
             [username, hash_password(password), role, ref_id]
         )
         return user_id

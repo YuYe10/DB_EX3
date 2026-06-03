@@ -5,7 +5,7 @@ import os
 from dotenv import load_dotenv
 
 
-APP_CORE_DIR = os.path.dirname(__file__)
+APP_CORE_DIR = os.path.dirname(os.path.abspath(__file__))
 BACKEND_ROOT = os.path.dirname(APP_CORE_DIR)
 REPO_ROOT = os.path.dirname(BACKEND_ROOT)
 
@@ -42,11 +42,11 @@ class Config:
     CORS_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
     
     # Database (from db.py)
-    DB_HOST = os.getenv('OG_HOST', '192.168.0.61')
-    DB_PORT = int(os.getenv('OG_PORT', '26000'))
-    DB_NAME = os.getenv('OG_DBNAME', 'student_db')
-    DB_USER = os.getenv('OG_USER', 'appuser')
-    DB_PASSWORD = os.getenv('OG_PASSWORD', '')
+    DB_HOST = os.getenv('MYSQL_HOST', '127.0.0.1')
+    DB_PORT = int(os.getenv('MYSQL_PORT', '3306'))
+    DB_NAME = os.getenv('MYSQL_DBNAME', 'student_db')
+    DB_USER = os.getenv('MYSQL_USER', 'student_app')
+    DB_PASSWORD = os.getenv('MYSQL_PASSWORD', '')
 
 
 # Ensure session directory exists inside app_core

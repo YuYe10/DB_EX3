@@ -132,13 +132,13 @@ class TeacherService:
                 c.name,
                 c.course_code,
                 COUNT(e.id) AS enrolled_count,
-                ROUND(AVG(COALESCE(e.final_grade, e.grade))::numeric, 2) AS avg_grade,
+                ROUND(AVG(COALESCE(e.final_grade, e.grade)), 2) AS avg_grade,
                 ROUND(
-                    (SUM(CASE WHEN COALESCE(e.final_grade, e.grade) >= 60 THEN 1 ELSE 0 END)::numeric
+                    (SUM(CASE WHEN COALESCE(e.final_grade, e.grade) >= 60 THEN 1 ELSE 0 END)
                         / NULLIF(COUNT(e.id), 0)) * 100, 2
                 ) AS pass_rate,
                 ROUND(
-                    (SUM(CASE WHEN COALESCE(e.final_grade, e.grade) >= 90 THEN 1 ELSE 0 END)::numeric
+                    (SUM(CASE WHEN COALESCE(e.final_grade, e.grade) >= 90 THEN 1 ELSE 0 END)
                         / NULLIF(COUNT(e.id), 0)) * 100, 2
                 ) AS excellent_rate
             FROM courses c

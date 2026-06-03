@@ -177,13 +177,13 @@ class AdminService:
             '''
             SELECT 
                 COUNT(e.id) AS enrolled_count,
-                ROUND(AVG(COALESCE(e.final_grade, e.grade))::numeric, 2) AS avg_grade,
+                ROUND(AVG(COALESCE(e.final_grade, e.grade)), 2) AS avg_grade,
                 ROUND(
-                    (SUM(CASE WHEN COALESCE(e.final_grade, e.grade) >= 60 THEN 1 ELSE 0 END)::numeric
+                    (SUM(CASE WHEN COALESCE(e.final_grade, e.grade) >= 60 THEN 1 ELSE 0 END)
                         / NULLIF(COUNT(e.id), 0)) * 100, 2
                 ) AS pass_rate,
                 ROUND(
-                    (SUM(CASE WHEN COALESCE(e.final_grade, e.grade) >= 90 THEN 1 ELSE 0 END)::numeric
+                    (SUM(CASE WHEN COALESCE(e.final_grade, e.grade) >= 90 THEN 1 ELSE 0 END)
                         / NULLIF(COUNT(e.id), 0)) * 100, 2
                 ) AS excellent_rate
             FROM enrollments e
@@ -257,10 +257,10 @@ class AdminService:
         params = []
         
         if major:
-            sql += ' AND major ILIKE %s'
+            sql += ' AND major LIKE %s'
             params.append(f'%{major}%')
         if keyword:
-            sql += ' AND (name ILIKE %s OR student_no ILIKE %s)'
+            sql += ' AND (name LIKE %s OR student_no LIKE %s)'
             params.extend([f'%{keyword}%', f'%{keyword}%'])
         
         sql += ' ORDER BY id DESC'
@@ -270,7 +270,7 @@ class AdminService:
     def create_student(student_no: str, name: str, major: str = '') -> int:
         """Create a new student and associated user account."""
         student_id = db.execute_returning(
-            'INSERT INTO students (student_no, name, major) VALUES (%s, %s, %s) RETURNING id',
+            'INSERT INTO students (student_no, name, major) VALUES (%s, %s, %s)',
             [student_no, name, major]
         )
         
@@ -325,7 +325,7 @@ class AdminService:
     def create_teacher(teacher_no: str, name: str, department: str = '') -> int:
         """Create a new teacher and associated user account."""
         teacher_id = db.execute_returning(
-            'INSERT INTO teachers (teacher_no, name, department) VALUES (%s, %s, %s) RETURNING id',
+            'INSERT INTO teachers (teacher_no, name, department) VALUES (%s, %s, %s)',
             [teacher_no, name, department]
         )
         
@@ -380,7 +380,6 @@ class AdminService:
             '''
             INSERT INTO courses (course_code, name, credit, capacity, teacher_id)
             VALUES (%s, %s, %s, %s, %s)
-            RETURNING id
             ''',
             [course_code, name, credit, capacity, teacher_id]
         )
@@ -441,7 +440,7 @@ class AdminService:
             UPDATE enrollments
             SET final_grade = CASE
                 WHEN ordinary_score IS NOT NULL AND final_score IS NOT NULL
-                THEN ROUND((ordinary_score * %s + final_score * %s)::numeric, 1)
+                THEN ROUND((ordinary_score * %s + final_score * %s), 1)
                 ELSE NULL
             END
             WHERE course_id = %s
@@ -489,7 +488,7 @@ class AdminService:
     def create_enrollment(student_id: int, course_id: int, status: str = 'enrolled') -> int:
         """Create a new enrollment."""
         return db.execute_returning(
-            'INSERT INTO enrollments (student_id, course_id, status) VALUES (%s, %s, %s) RETURNING id',
+            'INSERT INTO enrollments (student_id, course_id, status) VALUES (%s, %s, %s)',
             [student_id, course_id, status]
         )
     
@@ -589,19 +588,19 @@ class AdminService:
                 c.name, 
                 c.course_code, 
                 COUNT(e.id) AS enrolled_count,
-                ROUND(AVG(COALESCE(e.final_grade, e.grade))::numeric, 2) AS avg_grade,
+                ROUND(AVG(COALESCE(e.final_grade, e.grade)), 2) AS avg_grade,
                 ROUND(
-                    (SUM(CASE WHEN COALESCE(e.final_grade, e.grade) >= 60 THEN 1 ELSE 0 END)::numeric
+                    (SUM(CASE WHEN COALESCE(e.final_grade, e.grade) >= 60 THEN 1 ELSE 0 END)
                         / NULLIF(COUNT(e.id), 0)) * 100, 2
                 ) AS pass_rate,
                 ROUND(
-                    (SUM(CASE WHEN COALESCE(e.final_grade, e.grade) >= 90 THEN 1 ELSE 0 END)::numeric
+                    (SUM(CASE WHEN COALESCE(e.final_grade, e.grade) >= 90 THEN 1 ELSE 0 END)
                         / NULLIF(COUNT(e.id), 0)) * 100, 2
                 ) AS excellent_rate
             FROM courses c
             LEFT JOIN enrollments e ON e.course_id = c.id
-            WHERE (%s IS NULL OR c.course_code ILIKE %s)
-              AND (%s IS NULL OR c.name ILIKE %s)
+            WHERE (%s IS NULL OR c.course_code LIKE %s)
+              AND (%s IS NULL OR c.name LIKE %s)
             GROUP BY c.id, c.name, c.course_code
             ORDER BY c.id
             ''',

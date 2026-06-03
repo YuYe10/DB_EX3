@@ -83,10 +83,10 @@ class StudentService:
             '''
             SELECT e.*, c.name AS course_name, c.course_code, c.credit,
                    t.name AS teacher_name,
-                   CASE 
+                   CASE
                        WHEN e.ordinary_score IS NOT NULL AND e.final_score IS NOT NULL THEN
-                           ROUND(CAST(e.ordinary_score * COALESCE(c.ordinary_weight, 0.5) + 
-                                 e.final_score * COALESCE(c.final_weight, 0.5) AS NUMERIC), 2)
+                           ROUND(e.ordinary_score * COALESCE(c.ordinary_weight, 0.5) +
+                                 e.final_score * COALESCE(c.final_weight, 0.5), 2)
                        ELSE e.grade
                    END AS final_grade
             FROM enrollments e
@@ -149,7 +149,7 @@ class StudentService:
             raise ValueError('You are already enrolled in this course')
         
         return db.execute_returning(
-            'INSERT INTO enrollments (student_id, course_id, status) VALUES (%s, %s, %s) RETURNING id',
+            'INSERT INTO enrollments (student_id, course_id, status) VALUES (%s, %s, %s)',
             [student_id, course_id, 'enrolled']
         )
     

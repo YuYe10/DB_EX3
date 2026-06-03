@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip install *)",
+      "Bash(docker compose *)",
+      "Bash(sudo ss -tlnp)",
+      "Bash(python3 -c ' *)",
+      "Bash(python3 backend/app.py)",
+      "Bash(curl -s -X POST http://localhost:5000/api/auth/login -H 'Content-Type: application/json' -d '{\"username\":\"admin\",\"password\":\"admin@123\"}' -c /tmp/cookies.txt)",
+      "Bash(curl -s http://localhost:5000/api/health)",
+      "Bash(curl -s -X POST http://localhost:5000/api/teachers -H 'Content-Type: application/json' -b /tmp/cookies.txt -d '{\"teacher_no\":\"T001\",\"name\":\"张教授\",\"department\":\"计算机科学\"}')",
+      "Bash(curl -s -X POST http://localhost:5000/api/students -H 'Content-Type: application/json' -b /tmp/cookies.txt -d '{\"student_no\":\"S001\",\"name\":\"李同学\",\"major\":\"计算机\"}')",
+      "Bash(curl -s -X POST http://localhost:5000/api/courses -H 'Content-Type: application/json' -b /tmp/cookies.txt -d '{\"course_code\":\"CS101\",\"name\":\"数据结构\",\"credit\":3,\"capacity\":60,\"teacher_id\":1}')",
+      "Bash(curl -s http://localhost:5000/api/statistics/overview -b /tmp/cookies.txt)",
+      "Bash(kill %1)"
+    ]
+  }
+}

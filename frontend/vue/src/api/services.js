@@ -33,7 +33,7 @@ export const AuthService = {
  */
 export const StudentService = {
   getAvailableCourses() {
-    return apiClient.get('/student/courses');
+    return apiClient.get('/student/courses/available');
   },
 
   getEnrollments() {
@@ -41,7 +41,7 @@ export const StudentService = {
   },
 
   enrollCourse(courseId) {
-    return apiClient.post('/enrollments', { course_id: courseId });
+    return apiClient.post('/student/enrollments', { course_id: courseId });
   },
 
   dropCourse(enrollmentId) {
@@ -180,7 +180,7 @@ export const AdminService = {
 
   // 健康检查
   healthCheck() {
-    return apiClient.get('/admin/health');
+    return apiClient.get('/health');
   }
 };
 

@@ -77,7 +77,7 @@ class StudentRepository(Repository):
             params.append(major)
         
         if keyword:
-            query += " AND (student_no ILIKE %s OR name ILIKE %s)"
+            query += " AND (student_no LIKE %s OR name LIKE %s)"
             params.extend([f"%{keyword}%", f"%{keyword}%"])
         
         query += " ORDER BY id"
@@ -87,7 +87,7 @@ class StudentRepository(Repository):
         """Create new student."""
         return db.execute_returning(
             f"""INSERT INTO {self.TABLE} (student_no, name, major, password_hash)
-               VALUES (%s, %s, %s, %s) RETURNING id""",
+               VALUES (%s, %s, %s, %s)""",
             [data.get('student_no'), data.get('name'), data.get('major'), data.get('password_hash')]
         )
     
@@ -138,7 +138,7 @@ class TeacherRepository(Repository):
         """Create new teacher."""
         return db.execute_returning(
             f"""INSERT INTO {self.TABLE} (teacher_no, name, department, password_hash)
-               VALUES (%s, %s, %s, %s) RETURNING id""",
+               VALUES (%s, %s, %s, %s)""",
             [data.get('teacher_no'), data.get('name'), data.get('department'), data.get('password_hash')]
         )
     
@@ -196,7 +196,7 @@ class CourseRepository(Repository):
         """Create new course."""
         return db.execute_returning(
             f"""INSERT INTO {self.TABLE} (course_code, name, credit, capacity, teacher_id)
-               VALUES (%s, %s, %s, %s, %s) RETURNING id""",
+               VALUES (%s, %s, %s, %s, %s)""",
             [data.get('course_code'), data.get('name'), data.get('credit'), 
              data.get('capacity'), data.get('teacher_id')]
         )
@@ -255,7 +255,7 @@ class EnrollmentRepository(Repository):
         """Create new enrollment."""
         return db.execute_returning(
             f"""INSERT INTO {self.TABLE} (student_id, course_id, grade, status)
-               VALUES (%s, %s, %s, %s) RETURNING id""",
+               VALUES (%s, %s, %s, %s)""",
             [data.get('student_id'), data.get('course_id'), 
              data.get('grade'), data.get('status', 'enrolled')]
         )
