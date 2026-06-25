@@ -1,0 +1,144 @@
+/*
+ * Design Token System — macOS Ventura / Sonoma inspired
+ * Single source of truth for the entire design system.
+ * Imported globally via main.js
+ */
+
+:root {
+  /* ============================================================
+   * Color Palette
+   * ============================================================ */
+  --color-bg-primary: #f5f5f7;
+  --color-bg-secondary: #fafafa;
+  --color-bg-elevated: #ffffff;
+  --color-bg-glass: rgba(255, 255, 255, 0.72);
+  --color-bg-glass-strong: rgba(255, 255, 255, 0.85);
+
+  --color-border: rgba(0, 0, 0, 0.06);
+  --color-border-strong: rgba(0, 0, 0, 0.10);
+  --color-border-focus: rgba(0, 113, 227, 0.35);
+
+  --color-text-primary: #1d1d1f;
+  --color-text-secondary: #6e6e73;
+  --color-text-tertiary: #aeaeb2;
+  --color-text-inverse: #ffffff;
+
+  /* Accent — Apple Blue */
+  --color-accent: #0071e3;
+  --color-accent-hover: #0077ed;
+  --color-accent-light: rgba(0, 113, 227, 0.08);
+  --color-accent-active: rgba(0, 113, 227, 0.15);
+
+  /* Semantic colors */
+  --color-success: #34c759;
+  --color-success-light: rgba(52, 199, 89, 0.10);
+  --color-warning: #ff9f0a;
+  --color-warning-light: rgba(255, 159, 10, 0.10);
+  --color-danger: #ff3b30;
+  --color-danger-hover: #ff453a;
+  --color-danger-light: rgba(255, 59, 48, 0.08);
+  --color-info: #5ac8fa;
+  --color-info-light: rgba(90, 200, 250, 0.10);
+
+  /* ============================================================
+   * Typography
+   * ============================================================ */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display',
+    'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'SF Mono', 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+
+  --text-xs: 0.6875rem;     /* 11px */
+  --text-sm: 0.75rem;       /* 12px */
+  --text-base: 0.8125rem;   /* 13px */
+  --text-md: 0.875rem;      /* 14px */
+  --text-lg: 1rem;          /* 16px */
+  --text-xl: 1.25rem;       /* 20px */
+  --text-2xl: 1.5rem;       /* 24px */
+  --text-3xl: 2rem;         /* 32px */
+  --text-4xl: 2.5rem;       /* 40px */
+
+  --leading-tight: 1.15;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.7;
+
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+  --weight-extrabold: 800;
+
+  --tracking-tight: -0.022em;
+  --tracking-normal: -0.01em;
+  --tracking-wide: 0.02em;
+
+  /* ============================================================
+   * Spacing Scale (4px base)
+   * ============================================================ */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+
+  /* ============================================================
+   * Border Radius
+   * ============================================================ */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-2xl: 24px;
+  --radius-full: 9999px;
+
+  /* ============================================================
+   * Shadows — refined macOS multi-layer shadows
+   * ============================================================ */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.04), 0 2px 4px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.06), 0 10px 10px -5px rgba(0, 0, 0, 0.03);
+  --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.12);
+  --shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.06);
+  --shadow-button: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-button-hover: 0 2px 8px rgba(0, 0, 0, 0.10);
+
+  /* ============================================================
+   * Backdrop Blur
+   * ============================================================ */
+  --blur-glass: saturate(180%) blur(20px);
+  --blur-glass-heavy: saturate(200%) blur(30px);
+  --blur-subtle: saturate(150%) blur(10px);
+
+  /* ============================================================
+   * Animation Curves (spring-like)
+   * ============================================================ */
+  --ease-default: cubic-bezier(0.25, 0.1, 0.25, 1.0);
+  --ease-out: cubic-bezier(0.0, 0.0, 0.2, 1.0);
+  --ease-in: cubic-bezier(0.4, 0.0, 1.0, 1.0);
+  --ease-spring: cubic-bezier(0.42, 0.0, 0.58, 1.0);
+  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1.0);
+  --ease-smooth: cubic-bezier(0.4, 0.0, 0.6, 1.0);
+
+  --duration-instant: 100ms;
+  --duration-micro: 150ms;
+  --duration-fast: 200ms;
+  --duration-normal: 300ms;
+  --duration-slow: 400ms;
+  --duration-large: 500ms;
+  --duration-xl: 700ms;
+
+  /* ============================================================
+   * Layout
+   * ============================================================ */
+  --header-height: 52px;
+  --sidebar-width: 240px;
+  --content-max-width: 1200px;
+  --content-narrow: 720px;
+}

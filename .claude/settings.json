@@ -12,7 +12,9 @@
       "Bash(curl -s -X POST http://localhost:5000/api/students -H 'Content-Type: application/json' -b /tmp/cookies.txt -d '{\"student_no\":\"S001\",\"name\":\"李同学\",\"major\":\"计算机\"}')",
       "Bash(curl -s -X POST http://localhost:5000/api/courses -H 'Content-Type: application/json' -b /tmp/cookies.txt -d '{\"course_code\":\"CS101\",\"name\":\"数据结构\",\"credit\":3,\"capacity\":60,\"teacher_id\":1}')",
       "Bash(curl -s http://localhost:5000/api/statistics/overview -b /tmp/cookies.txt)",
-      "Bash(kill %1)"
+      "Bash(kill %1)",
+      "Bash(npm install *)",
+      "Bash(npm run *)"
     ]
   }
 }
